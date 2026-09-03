@@ -17,6 +17,20 @@ Early scaffold (v0). Read-only commands only.
 - The [Netlify CLI](https://docs.netlify.com/cli/get-started/) installed and
   logged in (`netlify login`)
 
+## Install
+
+Not on npm yet, so `npx -y netlify-axi` does not work. Install from a clone:
+
+```sh
+git clone https://github.com/simkimsia/netlify-axi
+pnpm --prefix netlify-axi install
+pnpm --prefix netlify-axi run build
+pnpm --prefix netlify-axi link --global   # puts `netlify-axi` on PATH
+```
+
+Check it: `netlify-axi --version`. To update later, `git pull` in the clone
+and run the build step again.
+
 ## Usage
 
 ```sh
