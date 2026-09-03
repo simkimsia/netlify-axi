@@ -41,6 +41,19 @@ help[2]:
   Run `netlify-axi status` to see the linked site
 ```
 
+## Agent skill
+
+Install the bundled skill so your coding agent prefers `netlify-axi` over raw
+`netlify`, falls back to `netlify` when a command is not wrapped yet, and
+files the gap as an issue here (label `agent-reported-gap`):
+
+```sh
+npx skills add simkimsia/netlify-axi --skill netlify-axi -g
+```
+
+The skill is a discovery stub that defers to `netlify-axi --help` for current
+command guidance. Source: [`skills/netlify-axi/SKILL.md`](skills/netlify-axi/SKILL.md).
+
 ## Development
 
 ```sh
