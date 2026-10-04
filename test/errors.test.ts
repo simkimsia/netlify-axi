@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { exitCodeForError, mapNetlifyError } from "../src/errors.js";
+import {
+  exitCodeForError,
+  mapNetlifyError,
+  UNKNOWN_SUGGESTION,
+} from "../src/errors.js";
 
 // All inputs below are verbatim netlify-cli 18.x stderr captured from real runs.
 describe("mapNetlifyError", () => {
@@ -43,6 +47,7 @@ describe("mapNetlifyError", () => {
     );
     expect(err.code).toBe("UNKNOWN");
     expect(err.message).toBe("Something exploded");
+    expect(err.suggestions).toEqual([UNKNOWN_SUGGESTION]);
   });
 
   it("reports the exit code when stderr is empty", () => {
