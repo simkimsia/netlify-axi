@@ -19,7 +19,7 @@ export class AxiError extends Error {
   }
 }
 
-export function exitCodeForError(error: AxiError): number {
+export function exitCodeForError(error: { code: string }): number {
   return error.code === "VALIDATION_ERROR" ? 2 : 1;
 }
 

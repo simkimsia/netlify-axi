@@ -1,5 +1,5 @@
 import { encode } from "@toon-format/toon";
-import { runAxiCli } from "axi-sdk-js";
+import { AxiError as SdkAxiError, runAxiCli } from "axi-sdk-js";
 import { AxiError, exitCodeForError, UNKNOWN_SUGGESTION } from "./errors.js";
 import { homeCommand } from "./commands/home.js";
 import { listCommand, LIST_HELP } from "./commands/list.js";
@@ -43,7 +43,7 @@ export async function main(): Promise<void> {
     // route this package's AxiError through an equivalent hook (gh-axi pattern).
     formatError: (error) => {
       const axiError =
-        error instanceof AxiError
+        error instanceof AxiError || error instanceof SdkAxiError
           ? error
           : new AxiError(
               error instanceof Error ? error.message : String(error),
