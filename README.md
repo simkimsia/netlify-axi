@@ -19,17 +19,22 @@ Early scaffold (v0). Read-only commands only.
 
 ## Install
 
-Not on npm yet, so `npx -y @simkimsia/netlify-axi` does not work. Install from a clone:
+```sh
+pnpm add -g @simkimsia/netlify-axi
+```
+
+Or run it without installing: `npx -y @simkimsia/netlify-axi --help`.
+
+Check it: `netlify-axi --version`. Update later with `netlify-axi update`.
+
+To work on it from a clone:
 
 ```sh
 git clone https://github.com/simkimsia/netlify-axi
-pnpm --prefix netlify-axi install
-pnpm --prefix netlify-axi run build
-pnpm --prefix netlify-axi link --global   # puts `netlify-axi` on PATH
+pnpm -C netlify-axi install
+pnpm -C netlify-axi run build
+pnpm add -g link:$PWD/netlify-axi   # puts `netlify-axi` on PATH
 ```
-
-Check it: `netlify-axi --version`. To update later, `git pull` in the clone
-and run the build step again.
 
 ## Usage
 
