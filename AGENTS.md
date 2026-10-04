@@ -64,8 +64,8 @@ upstream `kunchenguid/axi` repo).
   (import specifiers end in `.js`), Vitest tests in `test/`.
 - Tests are OFFLINE: they feed captured real fixtures to the exported parse
   helpers and never spawn the real netlify binary.
-- Conventional commit messages (`feat:`, `fix:`, `docs:`) with an eye toward
-  release-please later.
+- Conventional commit messages (`feat:`, `fix:`, `docs:`). Releases are cut by
+  release-please from these commits and published to npm by trusted publishing.
 
 ## Maintaining this file
 
