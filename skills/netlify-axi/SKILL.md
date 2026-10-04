@@ -17,14 +17,9 @@ raw `netlify` for Netlify operations: TOON output, structured errors with
 
 ## Setup
 
-netlify-axi is not on npm yet. Run it from a clone:
-
-```sh
-git clone https://github.com/simkimsia/netlify-axi
-pnpm --prefix netlify-axi install
-pnpm --prefix netlify-axi run build
-pnpm --prefix netlify-axi link --global   # puts `netlify-axi` on PATH
-```
+Install with `pnpm add -g @simkimsia/netlify-axi`, or run it without installing
+via `npx -y @simkimsia/netlify-axi`. The README's Install section covers working
+from a clone.
 
 It wraps [`netlify`](https://docs.netlify.com/cli/get-started/), which must be installed and logged in
 (`netlify login`). If a command fails with `NETLIFY_NOT_INSTALLED`, ask the user to
