@@ -94,8 +94,13 @@ export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
   return new AxiError(
     firstLine(trimmed) || `netlify exited with code ${exitCode}`,
     "UNKNOWN",
+    [UNKNOWN_SUGGESTION],
   );
 }
+
+/** Next step for errors no pattern recognizes (VISION.md: every error carries one). */
+export const UNKNOWN_SUGGESTION =
+  "Rerun the same command with plain `netlify` to see its full output, then report the gap at https://github.com/simkimsia/netlify-axi/issues";
 
 /** Strip netlify's " ›   " line prefix and leading "Error: " label. */
 function stripDecoration(text: string): string {
