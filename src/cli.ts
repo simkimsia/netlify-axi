@@ -1,6 +1,6 @@
 import { encode } from "@toon-format/toon";
 import { runAxiCli } from "axi-sdk-js";
-import { AxiError, exitCodeForError } from "./errors.js";
+import { AxiError, exitCodeForError, UNKNOWN_SUGGESTION } from "./errors.js";
 import { homeCommand } from "./commands/home.js";
 import { listCommand, LIST_HELP } from "./commands/list.js";
 import { statusCommand, STATUS_HELP } from "./commands/status.js";
@@ -48,6 +48,7 @@ export async function main(): Promise<void> {
           : new AxiError(
               error instanceof Error ? error.message : String(error),
               "UNKNOWN",
+              [UNKNOWN_SUGGESTION],
             );
       return {
         output: `${encode({
