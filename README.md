@@ -19,7 +19,7 @@ Early scaffold (v0). Read-only commands only.
 
 ## Install
 
-Not on npm yet, so `npx -y netlify-axi` does not work. Install from a clone:
+Not on npm yet, so `npx -y @simkimsia/netlify-axi` does not work. Install from a clone:
 
 ```sh
 git clone https://github.com/simkimsia/netlify-axi
