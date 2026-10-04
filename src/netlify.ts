@@ -3,6 +3,7 @@ import {
   AxiError,
   mapNetlifyError,
   netlifyNotInstalledError,
+  UNKNOWN_SUGGESTION,
 } from "./errors.js";
 
 export interface ExecResult {
@@ -50,6 +51,7 @@ export async function netlifyJson<T = unknown>(args: string[]): Promise<T> {
     throw new AxiError(
       `Unexpected netlify output: ${result.stdout.slice(0, 200)}`,
       "UNKNOWN",
+      [UNKNOWN_SUGGESTION],
     );
   }
 }
