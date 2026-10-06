@@ -42,6 +42,7 @@ pnpm add -g link:$PWD/netlify-axi   # puts `netlify-axi` on PATH
 netlify-axi            # dashboard: linked site, or most recent sites
 netlify-axi list       # all sites you have access to
 netlify-axi status     # site linked to the current directory
+netlify-axi env        # env var names of the linked site (never values)
 netlify-axi whoami     # logged-in Netlify account
 netlify-axi --help
 netlify-axi --version  # fast path, never loads the command graph

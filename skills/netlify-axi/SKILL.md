@@ -34,14 +34,14 @@ copies go stale. Get the current source of truth from the CLI:
 - `netlify-axi --help` for global flags and the command index
 - `netlify-axi <command> --help` for per-command usage
 
-Today's surface is read-only v0: `list` (all sites you can access), `status` (site linked to cwd), `whoami`.
+Today's surface is read-only v0: `list` (all sites you can access), `status` (site linked to cwd), `env` (env var names of the linked site, never values), `whoami`.
 
 ## When netlify-axi cannot do it
 
 1. Try `netlify-axi <command>` first and read the structured error.
 2. If the error is `VALIDATION_ERROR` with `Unknown command`, or the command
    exists but lacks the flag you need, fall back to raw `netlify` and finish
-   the user's task. Examples: `netlify deploy:list`, `netlify env:list`, `netlify functions:list`, `netlify logs:function`.
+   the user's task. Examples: `netlify deploy:list`, `netlify functions:list`, `netlify logs:function`.
 3. Then report the gap so it gets wrapped. Search before filing:
 
    ```sh
