@@ -60,6 +60,13 @@ help[2]:
   Run `netlify-axi status` to see the linked site
 ```
 
+Set `AXI_DEBUG=1` to print each `netlify` argv the axi forwards to stderr, ready to paste into a shell. stdout is unchanged.
+
+```sh
+$ AXI_DEBUG=1 netlify-axi whoami
+[axi-debug] netlify api getCurrentUser
+```
+
 ## Agent skill
 
 Install the bundled skill so your coding agent prefers `netlify-axi` over raw

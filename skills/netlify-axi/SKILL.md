@@ -38,7 +38,9 @@ Today's surface is read-only v0: `list` (all sites you can access), `status` (si
 
 ## When netlify-axi cannot do it
 
-1. Try `netlify-axi <command>` first and read the structured error.
+1. Try `netlify-axi <command>` first and read the structured error. Rerun it
+   with `AXI_DEBUG=1` to see the exact `netlify` argv it forwarded (printed on
+   stderr).
 2. If the error is `VALIDATION_ERROR` with `Unknown command`, or the command
    exists but lacks the flag you need, fall back to raw `netlify` and finish
    the user's task. Examples: `netlify deploy:list`, `netlify env:list`, `netlify functions:list`, `netlify logs:function`.
@@ -67,6 +69,10 @@ Today's surface is read-only v0: `list` (all sites you can access), `status` (si
 
    ## What the agent needed from the output
    <fields / shape, e.g. "deployment id, status, created_at as a TOON table">
+
+   ## Plain CLI result
+   With the exact argv the axi forwarded (AXI_DEBUG=1): works, same failure, or n/a.
+   If same failure: should the axi shape the arguments, map the error, or document the limit?
 
    ## Task context
    <one line on the user task that needed this>
