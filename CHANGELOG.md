@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/simkimsia/netlify-axi/compare/netlify-axi-v0.1.1...netlify-axi-v0.1.2) (2026-10-07)
+
+
+### Features
+
+* AXI_DEBUG=1 prints forwarded netlify argv to stderr ([d3d6c3d](https://github.com/simkimsia/netlify-axi/commit/d3d6c3d4dd1ef84b3d841d27f1413008cea4bf2e)), closes [#15](https://github.com/simkimsia/netlify-axi/issues/15)
+
 ## [0.1.1](https://github.com/simkimsia/netlify-axi/compare/netlify-axi-v0.1.0...netlify-axi-v0.1.1) (2026-10-04)
 
 
