@@ -60,7 +60,7 @@ help[2]:
   Run `netlify-axi status` to see the linked site
 ```
 
-Set `AXI_DEBUG=1` to print each `netlify` argv the axi forwards to stderr, ready to paste into a shell. stdout is unchanged.
+Set `AXI_DEBUG=1` to print each `netlify` argv the axi forwards to stderr. The part after the `[axi-debug]` prefix can be pasted into a shell as is. stdout is unchanged.
 
 ```sh
 $ AXI_DEBUG=1 netlify-axi whoami
