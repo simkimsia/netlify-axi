@@ -99,3 +99,5 @@ Breaking changes, such as a renamed error code, are listed under "⚠ BREAKING C
 ## License
 
 MIT
+
+This line is a throwaway Greptile smoke test and will not be merged.
