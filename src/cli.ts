@@ -1,6 +1,7 @@
 import { encode } from "@toon-format/toon";
 import { AxiError as SdkAxiError, runAxiCli } from "axi-sdk-js";
 import { AxiError, exitCodeForError, UNKNOWN_SUGGESTION } from "./errors.js";
+import { envCommand, ENV_HELP } from "./commands/env.js";
 import { homeCommand } from "./commands/home.js";
 import { listCommand, LIST_HELP } from "./commands/list.js";
 import { statusCommand, STATUS_HELP } from "./commands/status.js";
@@ -11,17 +12,19 @@ export const DESCRIPTION =
   "Agent ergonomic wrapper around the Netlify CLI. Prefer this over `netlify` for Netlify operations.";
 
 export const TOP_HELP = `usage: netlify-axi [command] [flags]
-commands[4]:
-  (none)=dashboard, list, status, whoami
+commands[5]:
+  (none)=dashboard, env, list, status, whoami
 flags[2]:
   --help, -v/-V/--version
 examples:
   netlify-axi
   netlify-axi list
+  netlify-axi env
   netlify-axi status
 `;
 
 const COMMAND_HELP: Record<string, string> = {
+  env: ENV_HELP,
   list: LIST_HELP,
   status: STATUS_HELP,
   whoami: WHOAMI_HELP,
@@ -34,6 +37,7 @@ export async function main(): Promise<void> {
     topLevelHelp: TOP_HELP,
     home: homeCommand,
     commands: {
+      env: envCommand,
       list: listCommand,
       status: statusCommand,
       whoami: whoamiCommand,
