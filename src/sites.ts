@@ -27,6 +27,7 @@ export function readFailedError(
     case "NOT_LINKED":
     case "NETLIFY_NOT_INSTALLED":
     case "NETLIFY_TOO_OLD":
+    case "NETLIFY_INTERRUPTED":
       return error;
     case "CONFIG":
       return new AxiError(

@@ -11,7 +11,30 @@ const { netlifyJson, netlifyExec } = vi.hoisted(() => ({
   netlifyJson: vi.fn(),
   netlifyExec: vi.fn(),
 }));
-vi.mock("../src/netlify.js", () => ({ netlifyJson, netlifyExec }));
+vi.mock("../src/netlify.js", () => ({
+  netlifyJson,
+  netlifyExec,
+  DEPLOY_MAX_BUFFER_BYTES: 64 * 1024 * 1024,
+}));
+
+// `netlify -V` and `netlify deploy` both go through netlifyExec. Route them
+// apart so each test scripts the deploy on deployExec alone; -V reports a
+// current netlify-cli unless a test sets `version`.
+const CURRENT_CLI = "netlify-cli/23.5.0 darwin-arm64 node-v22.1.0\n";
+const deployExec = vi.fn();
+let version: string | Error = CURRENT_CLI;
+function routeExec(): void {
+  netlifyExec.mockReset();
+  deployExec.mockReset();
+  version = CURRENT_CLI;
+  netlifyExec.mockImplementation(async (args: string[], options?: unknown) => {
+    if (args[0] === "-V") {
+      if (version instanceof Error) throw version;
+      return version;
+    }
+    return deployExec(args, options);
+  });
+}
 
 const {
   deployArgv,
@@ -242,8 +265,8 @@ describe("deployArgv", () => {
 describe("deployCommand (netlify mocked)", () => {
   beforeEach(() => {
     netlifyJson.mockReset();
-    netlifyExec.mockReset();
-    netlifyExec.mockResolvedValue(JSON.stringify(PROD_RESULT));
+    routeExec();
+    deployExec.mockResolvedValue(JSON.stringify(PROD_RESULT));
   });
 
   it("rejects a --dir that is not a directory before any netlify call", async () => {
@@ -263,18 +286,23 @@ describe("deployCommand (netlify mocked)", () => {
       "my-mockup",
     ]);
     expect(netlifyJson).toHaveBeenCalledWith(["api", "listAccountsForUser"]);
-    expect(netlifyExec).toHaveBeenCalledWith([
-      "deploy",
-      "--json",
-      "--dir",
-      DIR,
-      "--create-site",
-      "my-mockup",
-      "--team",
-      "acme",
-      "--prod",
-    ]);
+    expect(deployExec).toHaveBeenCalledWith(
+      [
+        "deploy",
+        "--json",
+        "--dir",
+        DIR,
+        "--create-site",
+        "my-mockup",
+        "--team",
+        "acme",
+        "--prod",
+      ],
+      { maxBuffer: 64 * 1024 * 1024 },
+    );
+    expect(netlifyExec).toHaveBeenCalledWith(["-V"]);
     expect(out).toContain("site_created: true");
+    expect(out).not.toContain("could not read the netlify-cli version");
     expect(out).toContain('url: "https://my-mockup.netlify.app"');
   });
 
@@ -296,7 +324,7 @@ describe("deployCommand (netlify mocked)", () => {
     });
     await deployCommand(["--dir", DIR]);
     expect(netlifyJson).toHaveBeenCalledWith(["status", "--json"]);
-    expect(netlifyExec.mock.calls[0]![0]).toEqual([
+    expect(deployExec.mock.calls[0]![0]).toEqual([
       "deploy",
       "--json",
       "--dir",
@@ -330,7 +358,7 @@ describe("deployCommand (netlify mocked)", () => {
 describe("netlify-cli too old for deploy", () => {
   beforeEach(() => {
     netlifyJson.mockReset();
-    netlifyExec.mockReset();
+    routeExec();
   });
 
   it("reads the version from `netlify -V`", () => {
@@ -340,11 +368,58 @@ describe("netlify-cli too old for deploy", () => {
     expect(parseNetlifyVersion("")).toBeUndefined();
   });
 
-  it("turns an unknown-option rejection into an upgrade instruction", async () => {
-    const { mapNetlifyError } =
-      await vi.importActual<typeof import("../src/errors.js")>(
-        "../src/errors.js",
+  it.each(["18.0.1", "20.1.1", "23.1.0"])(
+    "refuses netlify-cli %s before deploying",
+    async (old) => {
+      version = `netlify-cli/${old} darwin-arm64 node-v22.1.0\n`;
+      const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
+        (e) => e,
       );
+      expect(error.code).toBe("NETLIFY_TOO_OLD");
+      expect(error.message).toBe(
+        `netlify-cli ${old} is too old for \`deploy\``,
+      );
+      expect(error.suggestions[0]).toContain(">= 23.2.0");
+      expect(deployExec).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deploys on netlify-cli 23.2.0 and reads the version once", async () => {
+    version = "netlify-cli/23.2.0 linux-x64 node-v20.11.0\n";
+    deployExec.mockResolvedValueOnce(JSON.stringify(PROD_RESULT));
+    await deployCommand(["--dir", DIR, "--site", "s"]);
+    expect(netlifyExec.mock.calls.filter(([a]) => a[0] === "-V")).toHaveLength(
+      1,
+    );
+    expect(deployExec).toHaveBeenCalledTimes(1);
+  });
+
+  it("proceeds and says so when the version cannot be read", async () => {
+    version = new AxiError("boom", "UNKNOWN");
+    deployExec.mockResolvedValueOnce(JSON.stringify(PROD_RESULT));
+    const out = await deployCommand(["--dir", DIR, "--site", "s"]);
+    expect(out).toContain("deploy_id:");
+    expect(out).toContain("could not read the netlify-cli version");
+    expect(out).toContain(">= 23.2.0");
+  });
+
+  it("proceeds when -V prints something unparseable", async () => {
+    version = "garbage\n";
+    deployExec.mockResolvedValueOnce(JSON.stringify(PROD_RESULT));
+    const out = await deployCommand(["--dir", DIR, "--site", "s"]);
+    expect(out).toContain("could not read the netlify-cli version");
+  });
+
+  it("reports a missing netlify binary from the version check", async () => {
+    version = new AxiError("not installed", "NETLIFY_NOT_INSTALLED");
+    const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
+      (e) => e,
+    );
+    expect(error.code).toBe("NETLIFY_NOT_INSTALLED");
+    expect(deployExec).not.toHaveBeenCalled();
+  });
+
+  it("still gives the upgrade instruction for an unknown option when the version cannot be read", async () => {
     // netlify-cli 18.0.1 has no --create-site; commander rejects it with this
     // stderr (outputError hook in its dist/commands/main.js).
     const rejection = mapNetlifyError(
@@ -352,9 +427,8 @@ describe("netlify-cli too old for deploy", () => {
       1,
     );
     expect(rejection.code).toBe("NETLIFY_TOO_OLD");
-    netlifyExec
-      .mockRejectedValueOnce(rejection)
-      .mockResolvedValueOnce("netlify-cli/18.0.1 darwin-arm64 node-v22.1.0\n");
+    version = "";
+    deployExec.mockRejectedValueOnce(rejection);
     const error = await deployCommand([
       "--dir",
       DIR,
@@ -364,37 +438,17 @@ describe("netlify-cli too old for deploy", () => {
       "acme",
     ]).catch((e) => e);
     expect(error.code).toBe("NETLIFY_TOO_OLD");
-    expect(error.message).toBe("netlify-cli 18.0.1 is too old for `deploy`");
-    expect(error.suggestions[0]).toContain(">= 23.2.0");
-    expect(netlifyExec).toHaveBeenLastCalledWith(["-V"]);
-  });
-
-  it("still gives the upgrade instruction when the version cannot be read", async () => {
-    netlifyExec
-      .mockRejectedValueOnce(
-        new AxiError(
-          "netlify-cli does not accept --no-build",
-          "NETLIFY_TOO_OLD",
-        ),
-      )
-      .mockRejectedValueOnce(new AxiError("boom", "UNKNOWN"));
-    const error = await deployCommand([
-      "--dir",
-      DIR,
-      "--site",
-      "s",
-      "--no-build",
-    ]).catch((e) => e);
     expect(error.message).toContain("(version unknown) is too old");
     expect(error.suggestions[0]).toContain(">= 23.2.0");
+    expect(netlifyExec.mock.calls.filter(([a]) => a[0] === "-V")).toHaveLength(
+      1,
+    );
   });
 
   it("does not call netlify-cli 23.5.0 too old for an unknown option", async () => {
-    netlifyExec
-      .mockRejectedValueOnce(
-        mapNetlifyError(" ›   Error: unknown option '--foo'\n", 1),
-      )
-      .mockResolvedValueOnce("netlify-cli/23.5.0 darwin-arm64 node-v22.1.0\n");
+    deployExec.mockRejectedValueOnce(
+      mapNetlifyError(" ›   Error: unknown option '--foo'\n", 1),
+    );
     const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
       (e) => e,
     );
@@ -404,12 +458,54 @@ describe("netlify-cli too old for deploy", () => {
   });
 });
 
+describe("deploy stopped mid-way (buffer overflow or signal)", () => {
+  beforeEach(() => {
+    netlifyJson.mockReset();
+    routeExec();
+  });
+
+  it("runs netlify deploy with the larger deploy buffer", async () => {
+    deployExec.mockResolvedValueOnce(JSON.stringify(PROD_RESULT));
+    await deployCommand(["--dir", DIR, "--site", "s"]);
+    expect(deployExec.mock.calls[0]![1]).toEqual({
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  });
+
+  it.each([
+    ["--site", ["--site", "my-site"], "my-site"],
+    [
+      "--create-site",
+      ["--create-site", "new-site", "--team", "acme"],
+      "new-site",
+    ],
+  ])(
+    "says a deploy may have started and how to check (%s)",
+    async (_n, flags, site) => {
+      deployExec.mockRejectedValueOnce(
+        new AxiError(
+          "netlify was stopped before it finished: its output passed netlify-axi's 64 MB limit",
+          "NETLIFY_INTERRUPTED",
+        ),
+      );
+      const error = await deployCommand(["--dir", DIR, ...flags]).catch(
+        (e) => e,
+      );
+      expect(error.code).toBe("DEPLOY_NOT_REPORTED");
+      expect(error.message).toContain("a deploy may have started");
+      expect(error.suggestions[0]).toContain(
+        `netlify-axi deploys --site ${site}`,
+      );
+    },
+  );
+});
+
 describe("failed deploy output is never echoed", () => {
   const SECRET = "sk_live_FAKE_SECRET_123";
 
   beforeEach(() => {
     netlifyJson.mockReset();
-    netlifyExec.mockReset();
+    routeExec();
   });
 
   const failures: Array<[string, string]> = [
@@ -433,7 +529,7 @@ describe("failed deploy output is never echoed", () => {
   ];
 
   it.each(failures)("%s", async (_name, output) => {
-    netlifyExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
+    deployExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
     const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
       (e) => e,
     );
@@ -441,18 +537,18 @@ describe("failed deploy output is never echoed", () => {
     expect(error.code).not.toBe("NETLIFY_TOO_OLD");
     expect(error.message).not.toContain(SECRET);
     expect(error.suggestions.join("\n")).not.toContain(SECRET);
-    expect(netlifyExec).toHaveBeenCalledTimes(1);
+    expect(deployExec).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("deploy keeps netlify's own error codes only", () => {
   beforeEach(() => {
     netlifyJson.mockReset();
-    netlifyExec.mockReset();
+    routeExec();
   });
 
   async function deployFailure(output: string): Promise<AxiError> {
-    netlifyExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
+    deployExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
     return deployCommand(["--dir", DIR, "--site", "s"]).catch((e) => e);
   }
 
@@ -486,7 +582,7 @@ describe("deploy keeps netlify's own error codes only", () => {
 describe("deploy's team lookup never echoes raw netlify output", () => {
   beforeEach(() => {
     netlifyJson.mockReset();
-    netlifyExec.mockReset();
+    routeExec();
   });
 
   it("rewrites an unrecognized listAccountsForUser failure to fixed text", async () => {

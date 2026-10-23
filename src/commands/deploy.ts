@@ -2,7 +2,11 @@ import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { rejectExtraArgs, takeBoolFlag, takeFlag } from "../args.js";
 import { AxiError, UNKNOWN_SUGGESTION } from "../errors.js";
-import { netlifyExec, netlifyJson } from "../netlify.js";
+import {
+  DEPLOY_MAX_BUFFER_BYTES,
+  netlifyExec,
+  netlifyJson,
+} from "../netlify.js";
 import { encode, renderHelp, renderOutput } from "../toon.js";
 import {
   linkedSiteId,
@@ -16,7 +20,7 @@ Uploads a directory to a Netlify site and prints the deploy it made (site, ids, 
 Without --prod the deploy is a draft at its own URL; production is untouched.
 Without --site or --create-site it deploys to the site linked to this directory, and refuses if there is none.
 Runs the site's build command before uploading unless --no-build is passed.
-Needs netlify-cli >= 23.2.0 (older releases lack --create-site and --team).
+Needs netlify-cli >= 23.2.0 (older releases lack --create-site and --team; before 21.0.0 they skip the build). It reads \`netlify -V\` first and refuses an older one.
 flags[8]:
   --dir <path>          directory to upload (required)
   --prod                publish to the production URL
@@ -180,6 +184,21 @@ const UNREPORTED_HELP = [
 ];
 
 /**
+ * netlify was stopped mid-deploy (output past the buffer, or a signal): the
+ * upload may already have started, so say how to check instead of "failed".
+ */
+export function deployInterruptedError(site: string): AxiError {
+  return new AxiError(
+    "netlify deploy was stopped before it finished; a deploy may have started (output not shown: it may include build logs)",
+    "DEPLOY_NOT_REPORTED",
+    [
+      `Run \`netlify-axi deploys --site ${site}\` to see whether a deploy started and its state before retrying`,
+      "Or open the site's deploys page in the Netlify UI for the build log",
+    ],
+  );
+}
+
+/**
  * A failed `netlify deploy` with fixed text only: its stdout and stderr carry
  * build output, which can include env values, so none of it is echoed.
  */
@@ -256,10 +275,13 @@ export function parseDeployOutput(stdout: string): NetlifyDeployResult {
   );
 }
 
+/** Help line when `netlify -V` could not be read: the deploy went ahead unchecked. */
+export const VERSION_UNKNOWN_HELP = `netlify-axi could not read the netlify-cli version (\`netlify -V\`); deploy needs >= ${MIN_NETLIFY_CLI}, and before 21.0.0 netlify skips the build`;
+
 /** Flatten the deploy result into what changed (VISION.md: writes print it). */
 export function renderDeploy(
   result: NetlifyDeployResult,
-  opts: { prod: boolean; created: boolean },
+  opts: { prod: boolean; created: boolean; versionUnknown?: boolean },
 ): string {
   const site = result.site_name ?? "unknown";
   const deploy: Record<string, unknown> = {
@@ -283,6 +305,7 @@ export function renderDeploy(
         "This is a draft deploy; production is unchanged",
         "Rerun with --prod to publish this directory to production",
       ];
+  if (opts.versionUnknown) help.push(VERSION_UNKNOWN_HELP);
   return renderOutput([encode({ deploy }), renderHelp(help)]);
 }
 
@@ -314,30 +337,45 @@ export async function deployCommand(args: string[]): Promise<string> {
     target.site = linked;
   }
 
-  const stdout = await netlifyExec(deployArgv(opts, dir, target)).catch(
-    async (error: unknown) => {
-      if (!(error instanceof AxiError)) throw error;
-      if (error.code === "NETLIFY_TOO_OLD") {
-        const found = await netlifyVersion();
-        if (!found || compareVersions(found, MIN_NETLIFY_CLI) < 0) {
-          throw tooOldError(found);
-        }
-      }
-      throw deployFailedError(error);
-    },
-  );
+  // Check the version before deploying: netlify-cli 18-20 accept a deploy
+  // with none of the newer flags but skip the build. One `-V` call, reused
+  // below. An unreadable version proceeds (never lock out) and says so.
+  const found = await netlifyVersion();
+  if (found && compareVersions(found, MIN_NETLIFY_CLI) < 0) {
+    throw tooOldError(found);
+  }
+
+  const stdout = await netlifyExec(deployArgv(opts, dir, target), {
+    maxBuffer: DEPLOY_MAX_BUFFER_BYTES,
+  }).catch((error: unknown) => {
+    if (!(error instanceof AxiError)) throw error;
+    if (error.code === "NETLIFY_TOO_OLD" && !found) throw tooOldError(found);
+    if (error.code === "NETLIFY_INTERRUPTED") {
+      throw deployInterruptedError(
+        target.site ?? target.createSite ?? "<name>",
+      );
+    }
+    throw deployFailedError(error);
+  });
   return renderDeploy(parseDeployOutput(stdout), {
     prod: opts.prod,
     created: Boolean(opts.createSite),
+    versionUnknown: !found,
   });
 }
 
 /**
  * Installed netlify-cli version, if it can be read. `-V` prints commander's
- * one-line USER_AGENT; `--version` prints a longer environment page.
+ * one-line USER_AGENT; `--version` prints a longer environment page. A
+ * missing binary is reported as such; any other failure reads as unknown.
  */
 async function netlifyVersion(): Promise<string | undefined> {
-  const out = await netlifyExec(["-V"]).catch(() => "");
+  const out = await netlifyExec(["-V"]).catch((error: unknown) => {
+    if (error instanceof AxiError && error.code === "NETLIFY_NOT_INSTALLED") {
+      throw error;
+    }
+    return "";
+  });
   return parseNetlifyVersion(out);
 }
 
@@ -357,7 +395,7 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Rewrite netlify's "unknown option" into the version the agent must install. */
+/** An old netlify-cli (from `-V`, or an "unknown option" rejection) as the version to install. */
 export function tooOldError(found: string | undefined): AxiError {
   return new AxiError(
     `netlify-cli ${found ?? "(version unknown)"} is too old for \`deploy\``,

@@ -16,8 +16,9 @@ Early (v0). Read-only commands (including `deploys`) plus `deploy`.
 - Node.js >= 20
 - The [Netlify CLI](https://docs.netlify.com/cli/get-started/) installed and
   logged in (`netlify login`). `deploy` needs netlify-cli 23.2.0 or later,
-  the first release with `--create-site` and `--team`; an older one fails
-  with `NETLIFY_TOO_OLD`. The read commands work on 18.x.
+  the first release with `--create-site` and `--team`; it reads
+  `netlify -V` before deploying and refuses an older one with
+  `NETLIFY_TOO_OLD`. The read commands work on 18.x.
 
 ## Install
 

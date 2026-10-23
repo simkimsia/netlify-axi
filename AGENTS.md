@@ -19,7 +19,10 @@ upstream `kunchenguid/axi` repo).
   path silently stops being fast.
 - `src/netlify.ts` — sole place that spawns the `netlify` binary
   (`netlifyJson` / `netlifyExec`). Non-zero exits route through
-  `mapNetlifyError`; a missing binary maps to `NETLIFY_NOT_INSTALLED`.
+  `mapNetlifyError`; a missing binary maps to `NETLIFY_NOT_INSTALLED`. A
+  call stopped before netlify exits (output past `maxBuffer`, 10 MB default
+  and 64 MB for deploy, or a signal) maps to fixed-text `NETLIFY_INTERRUPTED`;
+  deploy rewrites it to say a deploy may have started.
 - `src/errors.ts` — `mapNetlifyError` walks `patterns` in order and returns on
   the first regex hit, so order is the contract: narrow patterns before broad
   ones (`CONFIG`'s "When resolving config file" must precede `NOT_FOUND`'s
@@ -40,7 +43,9 @@ upstream `kunchenguid/axi` repo).
 - `src/commands/deploy.ts` — the one write command. It always names the
   target for netlify (`--site`, or `--create-site` plus `--team`) so netlify
   never prompts; unnamed + unlinked, or several teams, refuses and lists the
-  choices. Its tests mock `src/netlify.ts`; never run a real deploy in tests.
+  choices. It reads `netlify -V` once before deploying and refuses below
+  `MIN_NETLIFY_CLI`; an unreadable version proceeds with a help line. Its
+  tests mock `src/netlify.ts`; never run a real deploy in tests.
 - Commands live in `src/commands/`, return TOON strings via `src/toon.ts`
   helpers; errors render through the `formatError` hook in `src/cli.ts`
   because the SDK's default formatter only recognizes its own AxiError class.
