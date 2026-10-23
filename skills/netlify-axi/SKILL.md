@@ -34,7 +34,7 @@ copies go stale. Get the current source of truth from the CLI:
 - `netlify-axi --help` for global flags and the command index
 - `netlify-axi <command> --help` for per-command usage
 
-Today's surface: `list` (all sites you can access), `status` (site linked to cwd), `whoami`, `deploys` (a site's recent deploys with commit, branch, state and which one is live; `--site` works without a linked dir), and `deploy` (upload a directory as a draft or, with `--prod`, to production, optionally creating the site).
+Today's surface: `list` (all sites you can access), `status` (site linked to cwd), `env` (env var names of the linked site, never values), `whoami`, `deploys` (a site's recent deploys with commit, branch, state and which one is live; `--site` works without a linked dir), and `deploy` (upload a directory as a draft or, with `--prod`, to production, optionally creating the site).
 
 ## When netlify-axi cannot do it
 
@@ -43,7 +43,7 @@ Today's surface: `list` (all sites you can access), `status` (site linked to cwd
    stderr).
 2. If the error is `VALIDATION_ERROR` with `Unknown command`, or the command
    exists but lacks the flag you need, fall back to raw `netlify` and finish
-   the user's task. Examples: `netlify env:list`, `netlify functions:list`, `netlify logs:function`.
+   the user's task. Examples: `netlify functions:list`, `netlify logs:function`.
 3. Then report the gap so it gets wrapped. Search before filing:
 
    ```sh
