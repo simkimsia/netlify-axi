@@ -43,6 +43,25 @@ describe("execOutcome", () => {
     expect(out.exitCode).not.toBe(0);
   });
 
+  it("accepts a 12 MB build log with the deploy cap but interrupts at the read cap", async () => {
+    const script = "process.stdout.write('x'.repeat(12 * 1024 * 1024))";
+    const read = await nodeOutcome(script);
+    expect(read.interrupted).toBe("max-buffer");
+    const deploy = await nodeOutcome(script, DEPLOY_MAX_BUFFER_BYTES);
+    expect(deploy.exitCode).toBe(0);
+    expect(deploy.interrupted).toBeUndefined();
+    expect(deploy.stdout.length).toBe(12 * 1024 * 1024);
+  });
+
+  it("interrupts a build log exceeding the 64 MB deploy cap", async () => {
+    const out = await nodeOutcome(
+      "process.stdout.write('x'.repeat(65 * 1024 * 1024))",
+      DEPLOY_MAX_BUFFER_BYTES,
+    );
+    expect(out.interrupted).toBe("max-buffer");
+    expect(out.exitCode).not.toBe(0);
+  });
+
   it("flags an older Node's overwritten maxBuffer code by its message", () => {
     const error = Object.assign(
       new RangeError("stdout maxBuffer length exceeded"),

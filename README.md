@@ -18,7 +18,10 @@ Early (v0). Read-only commands (including `deploys`) plus `deploy`.
   logged in (`netlify login`). `deploy` needs netlify-cli 23.2.0 or later,
   the first release with `--create-site` and `--team`; it reads
   `netlify -V` before deploying and refuses an older one with
-  `NETLIFY_TOO_OLD`. The read commands work on 18.x.
+  `NETLIFY_TOO_OLD`. If the version cannot be read or parsed, deployment
+  proceeds and successful output includes a help line explaining that the
+  version could not be checked. A missing binary still fails with
+  `NETLIFY_NOT_INSTALLED`. The read commands work on 18.x.
 
 ## Install
 
@@ -59,6 +62,13 @@ netlify-axi update     # self-update (built into axi-sdk-js)
 
 `deploy` runs the site's build command before it uploads, as `netlify deploy`
 does since netlify-cli 21. Pass `--no-build` to upload `--dir` as it is.
+
+Deploy output is limited to 64 MB per stream; other Netlify calls keep a
+10 MB limit. Exceeding the limit or being killed by a signal reports
+`NETLIFY_INTERRUPTED`. For a deploy, this becomes `DEPLOY_NOT_REPORTED`:
+a deploy may have started. Before retrying, run
+`netlify-axi deploys --site <name-or-id>` using the requested site, linked site ID, or newly created site
+name. Errors omit raw output because build logs may contain secrets.
 
 Example output (TOON):
 
