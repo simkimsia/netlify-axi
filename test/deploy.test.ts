@@ -474,14 +474,22 @@ describe("deploy stopped mid-way (buffer overflow or signal)", () => {
     const error = await deployCommand(["--dir", DIR]).catch((e) => e);
     expect(error.code).toBe("DEPLOY_NOT_REPORTED");
     expect(error.message).toContain("a deploy may have started");
-    expect(error.suggestions[0]).toContain("netlify-axi deploys --site linked-id");
+    expect(error.suggestions[0]).toContain(
+      "netlify-axi deploys --site linked-id",
+    );
   });
 
   it("preserves interruption during team resolution without checking the version or deploying", async () => {
-    const interrupted = new AxiError("stopped by signal", "NETLIFY_INTERRUPTED");
+    const interrupted = new AxiError(
+      "stopped by signal",
+      "NETLIFY_INTERRUPTED",
+    );
     netlifyJson.mockRejectedValueOnce(interrupted);
     const error = await deployCommand([
-      "--dir", DIR, "--create-site", "new-site",
+      "--dir",
+      DIR,
+      "--create-site",
+      "new-site",
     ]).catch((e) => e);
     expect(error).toBe(interrupted);
     expect(netlifyExec).not.toHaveBeenCalled();
