@@ -1,6 +1,6 @@
 ---
 name: netlify-axi
-description: "Operate Netlify through the netlify-axi CLI - sites, the site linked to the current directory, and account identity. Use whenever a task touches Netlify. Prefer it over raw `netlify`; when a command is not wrapped yet, fall back to `netlify` and report the gap as a GitHub issue on simkimsia/netlify-axi."
+description: "Operate Netlify through the netlify-axi CLI - sites, the site linked to the current directory, account identity, and deploys. Use whenever a task touches Netlify. Prefer it over raw `netlify`; when a command is not wrapped yet, fall back to `netlify` and report the gap as a GitHub issue on simkimsia/netlify-axi."
 user-invocable: false
 author: KimSia Sim (simkimsia)
 metadata:
@@ -34,7 +34,7 @@ copies go stale. Get the current source of truth from the CLI:
 - `netlify-axi --help` for global flags and the command index
 - `netlify-axi <command> --help` for per-command usage
 
-Today's surface is read-only v0: `list` (all sites you can access), `status` (site linked to cwd), `whoami`.
+Today's surface: `list` (all sites you can access), `status` (site linked to cwd), `whoami`, and `deploy` (upload a directory as a draft or, with `--prod`, to production, optionally creating the site).
 
 ## When netlify-axi cannot do it
 
@@ -83,6 +83,6 @@ Today's surface is read-only v0: `list` (all sites you can access), `status` (si
 
 ## Deliberately not wrapped (do not file)
 
-Mutating commands: `netlify deploy`, `netlify env:set/unset`, `netlify sites:create/delete`, `netlify link/unlink`, `netlify functions:invoke`.
-These are excluded by design in v0. Use `netlify` directly, tell the user
+Mutating commands: `netlify env:set/unset`, `netlify sites:create/delete`, `netlify link/unlink`, `netlify functions:invoke`.
+These are excluded by design for now. Use `netlify` directly, tell the user
 you did so, and do not open an issue for them.

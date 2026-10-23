@@ -9,7 +9,7 @@ reference implementation [`gh-axi`](https://github.com/kunchenguid/gh-axi).
 
 ## Status
 
-Early scaffold (v0). Read-only commands only.
+Early (v0). Read-only commands plus `deploy`.
 
 ## Requirements
 
@@ -43,6 +43,9 @@ netlify-axi            # dashboard: linked site, or most recent sites
 netlify-axi list       # all sites you have access to
 netlify-axi status     # site linked to the current directory
 netlify-axi whoami     # logged-in Netlify account
+netlify-axi deploy --dir dist          # draft deploy to the linked site
+netlify-axi deploy --dir dist --prod   # publish to production
+netlify-axi deploy --dir public --prod --create-site my-mockup
 netlify-axi --help
 netlify-axi --version  # fast path, never loads the command graph
 netlify-axi update     # self-update (built into axi-sdk-js)

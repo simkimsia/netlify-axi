@@ -42,7 +42,7 @@ export function debugArgv(
 function run(args: string[]): Promise<ExecResult> {
   debugArgv(args);
   return new Promise((resolve) => {
-    execFile(
+    const child = execFile(
       "netlify",
       args,
       { maxBuffer: MAX_BUFFER_BYTES },
@@ -61,6 +61,10 @@ function run(args: string[]): Promise<ExecResult> {
         });
       },
     );
+    // Agents cannot answer prompts. Commands pass every choice as a flag so
+    // netlify has nothing to ask; closing stdin means any prompt that still
+    // appears reads end-of-input rather than an open pipe nobody writes to.
+    child?.stdin?.end();
   });
 }
 

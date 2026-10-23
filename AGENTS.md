@@ -26,8 +26,13 @@ upstream `kunchenguid/axi` repo).
   "does not exist"). Verify new patterns against real netlify stderr before
   adding them; `stripDecoration` removes the `›  ` prefix and the leading
   `Error: ` label netlify puts on every stderr line.
-- `src/args.ts` — v0 commands take no args/flags; `assertNoArgs` rejects
-  unknown input by name with exit code 2 before any netlify call (AXI §6).
+- `src/args.ts` — read commands take no args/flags (`assertNoArgs`); commands
+  with flags use `takeFlag`/`takeBoolFlag` then `rejectExtraArgs`. Unknown
+  input is rejected by name with exit code 2 before any netlify call (AXI §6).
+- `src/commands/deploy.ts` — the one write command. It always names the
+  target for netlify (`--site`, or `--create-site` plus `--team`) so netlify
+  never prompts; unnamed + unlinked, or several teams, refuses and lists the
+  choices. Its tests mock `src/netlify.ts`; never run a real deploy in tests.
 - Commands live in `src/commands/`, return TOON strings via `src/toon.ts`
   helpers; errors render through the `formatError` hook in `src/cli.ts`
   because the SDK's default formatter only recognizes its own AxiError class.
