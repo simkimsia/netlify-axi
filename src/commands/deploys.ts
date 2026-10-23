@@ -35,7 +35,16 @@ export interface DeploysOptions {
 
 /** Parse and validate deploys argv. Every rejection happens before any netlify call. */
 export function parseDeploysArgs(argv: string[]): DeploysOptions {
-  const args = [...argv];
+  // takeFlag reads "--limit -3" as a missing value; keep a negative number
+  // as the value so it gets the range error below.
+  const args: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--limit" && /^-\d/.test(argv[i + 1] ?? "")) {
+      args.push(`--limit=${argv[++i]}`);
+    } else {
+      args.push(argv[i]);
+    }
+  }
   const site = takeFlag("deploys", args, "--site");
   const rawLimit = takeFlag("deploys", args, "--limit");
   rejectExtraArgs("deploys", args);
@@ -125,6 +134,17 @@ function liveBlock(site: NetlifySite): Record<string, unknown> | string {
   };
 }
 
+/**
+ * A site name as one shell word. Hints always name the site: a bare
+ * `netlify-axi deploy` would go to whatever site this directory links to,
+ * which need not be the site just listed (VISION.md: never guess a target).
+ */
+export function shellWord(text: string): string {
+  return /^[A-Za-z0-9._-]+$/.test(text)
+    ? text
+    : `'${text.replace(/'/g, "'\\''")}'`;
+}
+
 export function renderDeploys(
   site: NetlifySite,
   deploys: NetlifyDeploy[],
@@ -136,7 +156,7 @@ export function renderDeploys(
       header,
       `deploys: 0 deploys found for ${site.name}`,
       renderHelp([
-        "Run `netlify-axi deploy --dir <path>` to make a draft deploy",
+        `Run \`netlify-axi deploy --dir <path> --site ${shellWord(site.name)}\` to make a draft deploy`,
       ]),
     ]);
   }
@@ -161,7 +181,7 @@ export function renderDeploys(
     );
   }
   help.push(
-    "Run `netlify-axi deploy --dir <path> --prod` to publish a new deploy",
+    `Run \`netlify-axi deploy --dir <path> --site ${shellWord(site.name)} --prod\` to publish a new deploy`,
   );
   return renderOutput([
     header,

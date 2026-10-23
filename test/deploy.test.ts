@@ -482,3 +482,40 @@ describe("deploy keeps netlify's own error codes only", () => {
     expect(error.message).not.toContain("Unauthorized");
   });
 });
+
+describe("deploy's team lookup never echoes raw netlify output", () => {
+  beforeEach(() => {
+    netlifyJson.mockReset();
+    netlifyExec.mockReset();
+  });
+
+  it("rewrites an unrecognized listAccountsForUser failure to fixed text", async () => {
+    netlifyJson.mockRejectedValueOnce(
+      mapNetlifyError(" ›   Error: boom SECRET_TOKEN=abc123", 1),
+    );
+    const error = await deployCommand([
+      "--dir",
+      DIR,
+      "--create-site",
+      "x",
+    ]).catch((e) => e);
+    expect(error.code).toBe("UNKNOWN");
+    expect(error.message).toBe(
+      "`netlify api listAccountsForUser` failed (output not shown)",
+    );
+    expect(netlifyExec).not.toHaveBeenCalled();
+  });
+
+  it("keeps AUTH from the team lookup", async () => {
+    netlifyJson.mockRejectedValueOnce(
+      mapNetlifyError(" ›   JSONHTTPError: Unauthorized", 1),
+    );
+    const error = await deployCommand([
+      "--dir",
+      DIR,
+      "--create-site",
+      "x",
+    ]).catch((e) => e);
+    expect(error.code).toBe("AUTH");
+  });
+});

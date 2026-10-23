@@ -87,16 +87,19 @@ describe("parseDeploysArgs", () => {
     });
   });
 
-  it.each(["0", "101", "abc", "2.5", "-3"])("rejects --limit %s", (value) => {
-    const error = (() => {
-      try {
-        parseDeploysArgs([`--limit=${value}`]);
-      } catch (e) {
-        return e as AxiError;
-      }
-    })();
-    expect(error?.code).toBe("VALIDATION_ERROR");
-  });
+  it.each(["0", "101", "abc", "2.5", "-3", "1e2"])(
+    "rejects --limit %s",
+    (value) => {
+      const error = (() => {
+        try {
+          parseDeploysArgs([`--limit=${value}`]);
+        } catch (e) {
+          return e as AxiError;
+        }
+      })();
+      expect(error?.code).toBe("VALIDATION_ERROR");
+    },
+  );
 
   it("rejects a positional site and unknown flags by name", () => {
     expect(() => parseDeploysArgs(["my-app"])).toThrow(
@@ -293,5 +296,50 @@ describe("deploys never echoes raw netlify output in errors", () => {
     const error = await deploysCommand([]).catch((e) => e);
     expect(error.code).toBe("CONFIG");
     expect(error.message).not.toContain("/secret/path");
+  });
+});
+
+describe("deploy hints always name the listed site", () => {
+  beforeEach(() => netlifyJson.mockReset());
+
+  // A bare `netlify-axi deploy` goes to the linked site, which need not be
+  // the site just listed, so every hint must carry --site.
+  it.each([
+    ["--site given, deploys exist", ["--site", "my-app"], DEPLOYS],
+    ["--site given, empty state", ["--site", "my-app"], []],
+    ["linked site, deploys exist", [], DEPLOYS],
+    ["linked site, empty state", [], []],
+  ])("%s", async (_label, argv, deploys) => {
+    if (argv.length === 0) {
+      netlifyJson.mockResolvedValueOnce({ siteData: { "site-id": SITE_ID } });
+    }
+    netlifyJson.mockResolvedValueOnce(SITES).mockResolvedValueOnce(deploys);
+    const out = await deploysCommand(argv);
+    const hints = out
+      .split("\n")
+      .filter((l) => l.includes("netlify-axi deploy "));
+    expect(hints.length).toBeGreaterThan(0);
+    for (const hint of hints) expect(hint).toContain("--site my-app");
+  });
+
+  it("quotes a site name that is not a plain shell word", () => {
+    const out = renderDeploys({ id: "q", name: "it's odd" }, [], 10);
+    expect(out).toContain("--site 'it'\\''s odd'");
+  });
+});
+
+describe("--limit with a negative number", () => {
+  it("gives the range error in both flag forms", () => {
+    for (const argv of [["--limit", "-3"], ["--limit=-3"]]) {
+      expect(() => parseDeploysArgs(argv)).toThrow(
+        "--limit must be a whole number from 1 to 100, got -3",
+      );
+    }
+  });
+
+  it("still reports a missing value when the next arg is a flag", () => {
+    expect(() => parseDeploysArgs(["--limit", "--site", "x"])).toThrow(
+      "--limit requires a value",
+    );
   });
 });

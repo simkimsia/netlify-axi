@@ -4,7 +4,12 @@ import { rejectExtraArgs, takeBoolFlag, takeFlag } from "../args.js";
 import { AxiError, UNKNOWN_SUGGESTION } from "../errors.js";
 import { netlifyExec, netlifyJson } from "../netlify.js";
 import { encode, renderHelp, renderOutput } from "../toon.js";
-import { linkedSiteId, listSites, noTargetError } from "../sites.js";
+import {
+  linkedSiteId,
+  listSites,
+  noTargetError,
+  readFailedError,
+} from "../sites.js";
 
 export const DEPLOY_HELP = `usage: netlify-axi deploy --dir <path> [--site <name-or-id> | --create-site <name> [--team <slug>]] [flags]
 Uploads a directory to a Netlify site and prints the deploy it made (site, ids, state, url).
@@ -293,7 +298,12 @@ export async function deployCommand(args: string[]): Promise<string> {
     target.team =
       opts.team ??
       pickTeam(
-        await netlifyJson<NetlifyAccount[]>(["api", "listAccountsForUser"]),
+        await netlifyJson<NetlifyAccount[]>([
+          "api",
+          "listAccountsForUser",
+        ]).catch((error: unknown) => {
+          throw readFailedError(error, "api listAccountsForUser");
+        }),
       );
   } else {
     const linked = await linkedSiteId();
