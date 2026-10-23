@@ -12,12 +12,20 @@ export type ErrorCode =
 export class AxiError extends Error {
   readonly code: ErrorCode;
   readonly suggestions: string[];
+  /** True when the pattern matched a line netlify itself printed (prefixed "›"). */
+  readonly fromNetlifyLine: boolean;
 
-  constructor(message: string, code: ErrorCode, suggestions: string[] = []) {
+  constructor(
+    message: string,
+    code: ErrorCode,
+    suggestions: string[] = [],
+    fromNetlifyLine = false,
+  ) {
     super(message);
     this.name = "AxiError";
     this.code = code;
     this.suggestions = suggestions;
+    this.fromNetlifyLine = fromNetlifyLine;
   }
 }
 
@@ -101,6 +109,10 @@ const patterns: ErrorPattern[] = [
 /** Translate raw netlify CLI stderr into a structured, actionable AxiError. */
 export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
   const trimmed = stripDecoration(stderr);
+  const netlifyLines = stderr
+    .split("\n")
+    .filter((line) => /^\s*›/.test(line))
+    .join("\n");
   for (const entry of patterns) {
     const match = (entry.raw ? stderr : trimmed).match(entry.pattern);
     if (match) {
@@ -108,7 +120,15 @@ export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
         typeof entry.message === "function"
           ? entry.message(match)
           : (entry.message ?? firstLine(trimmed));
-      return new AxiError(message, entry.code, entry.suggestions);
+      const fromNetlifyLine = entry.raw
+        ? true
+        : entry.pattern.test(stripDecoration(netlifyLines));
+      return new AxiError(
+        message,
+        entry.code,
+        entry.suggestions,
+        fromNetlifyLine,
+      );
     }
   }
   return new AxiError(

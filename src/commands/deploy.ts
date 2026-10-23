@@ -204,21 +204,21 @@ const UNREPORTED_HELP = [
  * build output, which can include env values, so none of it is echoed.
  */
 export function deployFailedError(error: AxiError): AxiError {
+  if (error.code === "NETLIFY_NOT_INSTALLED") return error;
   if (
-    error.code === "AUTH" ||
-    error.code === "NOT_LINKED" ||
-    error.code === "NETLIFY_NOT_INSTALLED"
+    error.fromNetlifyLine &&
+    (error.code === "AUTH" || error.code === "NOT_LINKED")
   ) {
     return error;
   }
-  if (error.code === "CONFIG") {
+  if (error.fromNetlifyLine && error.code === "CONFIG") {
     return new AxiError(
       "netlify could not resolve this directory's netlify.toml",
       "CONFIG",
       error.suggestions,
     );
   }
-  if (error.code === "NOT_FOUND") {
+  if (error.fromNetlifyLine && error.code === "NOT_FOUND") {
     return new AxiError(
       "netlify deploy could not find the site or a path it needs",
       "NOT_FOUND",

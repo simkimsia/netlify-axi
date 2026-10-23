@@ -444,3 +444,33 @@ describe("failed deploy output is never echoed", () => {
     expect(netlifyExec).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("deploy keeps netlify's own error codes only", () => {
+  beforeEach(() => {
+    netlifyJson.mockReset();
+    netlifyExec.mockReset();
+  });
+
+  async function deployFailure(output: string): Promise<AxiError> {
+    netlifyExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
+    return deployCommand(["--dir", DIR, "--site", "s"]).catch((e) => e);
+  }
+
+  it.each([
+    ["Module not found", "> webpack\nModule not found: Can't resolve './x'"],
+    ["Unauthorized", "> fetch-data\nRequest failed: 401 Unauthorized"],
+  ])(
+    "an undecorated %s in build output is a build failure",
+    async (_n, out) => {
+      const error = await deployFailure(out);
+      expect(error.code).toBe("UNKNOWN");
+      expect(error.message).toContain("build failed");
+    },
+  );
+
+  it("a decorated netlify auth error stays AUTH", async () => {
+    const error = await deployFailure(" ›   JSONHTTPError: Unauthorized");
+    expect(error.code).toBe("AUTH");
+    expect(error.suggestions.join(" ")).toContain("netlify login");
+  });
+});
