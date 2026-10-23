@@ -26,11 +26,11 @@ examples:
   netlify-axi env
 `;
 
-/** Shape of \`netlify env:list --json\` (netlify-cli 18.x): a flat name -> value map. */
+/** Shape of `netlify env:list --json` (netlify-cli 18.x): a flat name -> value map. */
 export type NetlifyEnv = Record<string, unknown>;
 
 /**
- * Reduce \`netlify env:list --json\` to sorted variable names and a count.
+ * Reduce `netlify env:list --json` to sorted variable names and a count.
  * Only keys are read — values must never reach the output.
  */
 export function parseEnv(env: NetlifyEnv): { count: number; names: string[] } {
