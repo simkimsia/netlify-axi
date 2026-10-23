@@ -113,29 +113,45 @@ export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
     .split("\n")
     .filter((line) => /^\s*›/.test(line))
     .join("\n");
-  for (const entry of patterns) {
-    const match = (entry.raw ? stderr : trimmed).match(entry.pattern);
-    if (match) {
-      const message =
-        typeof entry.message === "function"
-          ? entry.message(match)
-          : (entry.message ?? firstLine(trimmed));
-      const fromNetlifyLine = entry.raw
-        ? true
-        : entry.pattern.test(stripDecoration(netlifyLines));
-      return new AxiError(
-        message,
-        entry.code,
-        entry.suggestions,
-        fromNetlifyLine,
-      );
-    }
+  const decorated = stripDecoration(netlifyLines);
+  const first = firstMatch(stderr, trimmed);
+  if (!first) {
+    return new AxiError(
+      firstLine(trimmed) || `netlify exited with code ${exitCode}`,
+      "UNKNOWN",
+      [UNKNOWN_SUGGESTION],
+    );
   }
-  return new AxiError(
-    firstLine(trimmed) || `netlify exited with code ${exitCode}`,
-    "UNKNOWN",
-    [UNKNOWN_SUGGESTION],
-  );
+  if (first.entry.raw || first.entry.pattern.test(decorated)) {
+    return toError(first, trimmed, true);
+  }
+  const own = firstMatch(netlifyLines, decorated);
+  return own ? toError(own, decorated, true) : toError(first, trimmed, false);
+}
+
+interface PatternMatch {
+  entry: ErrorPattern;
+  match: RegExpMatchArray;
+}
+
+function firstMatch(raw: string, stripped: string): PatternMatch | undefined {
+  for (const entry of patterns) {
+    const match = (entry.raw ? raw : stripped).match(entry.pattern);
+    if (match) return { entry, match };
+  }
+  return undefined;
+}
+
+function toError(
+  { entry, match }: PatternMatch,
+  stripped: string,
+  fromNetlifyLine: boolean,
+): AxiError {
+  const message =
+    typeof entry.message === "function"
+      ? entry.message(match)
+      : (entry.message ?? firstLine(stripped));
+  return new AxiError(message, entry.code, entry.suggestions, fromNetlifyLine);
 }
 
 /** Next step for errors no pattern recognizes (VISION.md: every error carries one). */

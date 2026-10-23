@@ -473,4 +473,12 @@ describe("deploy keeps netlify's own error codes only", () => {
     expect(error.code).toBe("AUTH");
     expect(error.suggestions.join(" ")).toContain("netlify login");
   });
+
+  it("finds netlify's own error behind an earlier build-output match", async () => {
+    const error = await deployFailure(
+      "npm warn fetch GET 401 Unauthorized\n ›   JSONHTTPError: Not Found",
+    );
+    expect(error.code).toBe("NOT_FOUND");
+    expect(error.message).not.toContain("Unauthorized");
+  });
 });
