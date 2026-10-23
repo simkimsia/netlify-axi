@@ -200,6 +200,45 @@ const UNREPORTED_HELP = [
 ];
 
 /**
+ * A failed `netlify deploy` with fixed text only: its stdout and stderr carry
+ * build output, which can include env values, so none of it is echoed.
+ */
+export function deployFailedError(error: AxiError): AxiError {
+  if (
+    error.code === "AUTH" ||
+    error.code === "NOT_LINKED" ||
+    error.code === "NETLIFY_NOT_INSTALLED"
+  ) {
+    return error;
+  }
+  if (error.code === "CONFIG") {
+    return new AxiError(
+      "netlify could not resolve this directory's netlify.toml",
+      "CONFIG",
+      error.suggestions,
+    );
+  }
+  if (error.code === "NOT_FOUND") {
+    return new AxiError(
+      "netlify deploy could not find the site or a path it needs",
+      "NOT_FOUND",
+      [
+        "Run `netlify-axi list` to check the site name",
+        "Check that --dir and the paths in netlify.toml exist",
+      ],
+    );
+  }
+  return new AxiError(
+    "netlify deploy failed, or the site's build failed (output not shown: it may include build logs)",
+    "UNKNOWN",
+    [
+      "Run the same `netlify deploy` locally to see its full output",
+      "Or open the site's deploys page in the Netlify UI for the build log",
+    ],
+  );
+}
+
+/**
  * netlify may print build output ahead of the JSON document, so parse the
  * whole of stdout first and fall back to the last line that opens an object.
  * stdout is never echoed in an error: build logs can carry env values.
@@ -304,10 +343,14 @@ export async function deployCommand(args: string[]): Promise<string> {
 
   const stdout = await netlifyExec(deployArgv(opts, dir, target)).catch(
     async (error: unknown) => {
-      if (error instanceof AxiError && error.code === "NETLIFY_TOO_OLD") {
-        throw tooOldError(error.message, await netlifyVersion());
+      if (!(error instanceof AxiError)) throw error;
+      if (error.code === "NETLIFY_TOO_OLD") {
+        const found = await netlifyVersion();
+        if (!found || compareVersions(found, MIN_NETLIFY_CLI) < 0) {
+          throw tooOldError(found);
+        }
       }
-      throw error;
+      throw deployFailedError(error);
     },
   );
   return renderDeploy(parseDeployOutput(stdout), {
@@ -330,13 +373,21 @@ export function parseNetlifyVersion(output: string): string | undefined {
   return output.match(/netlify-cli\/(\d+\.\d+\.\d+\S*)/)?.[1];
 }
 
+/** Numeric major.minor.patch comparison; pre-release tags are ignored. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(/[.-]/, 3).map(Number);
+  const pb = b.split(/[.-]/, 3).map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 /** Rewrite netlify's "unknown option" into the version the agent must install. */
-export function tooOldError(
-  detail: string,
-  found: string | undefined,
-): AxiError {
+export function tooOldError(found: string | undefined): AxiError {
   return new AxiError(
-    `netlify-cli ${found ?? "(version unknown)"} is too old for \`deploy\` (${detail})`,
+    `netlify-cli ${found ?? "(version unknown)"} is too old for \`deploy\``,
     "NETLIFY_TOO_OLD",
     [
       `Upgrade to netlify-cli >= ${MIN_NETLIFY_CLI}: \`npm install -g netlify-cli@latest\`, then retry`,

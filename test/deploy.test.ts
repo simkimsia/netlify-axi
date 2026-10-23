@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decode } from "@toon-format/toon";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AxiError } from "../src/errors.js";
+import { AxiError, mapNetlifyError } from "../src/errors.js";
 
 // No test may reach the real netlify binary: every call goes through these
 // mocks, and a deploy is never run for real.
@@ -364,9 +364,7 @@ describe("netlify-cli too old for deploy", () => {
       "acme",
     ]).catch((e) => e);
     expect(error.code).toBe("NETLIFY_TOO_OLD");
-    expect(error.message).toBe(
-      "netlify-cli 18.0.1 is too old for `deploy` (netlify-cli does not accept --create-site)",
-    );
+    expect(error.message).toBe("netlify-cli 18.0.1 is too old for `deploy`");
     expect(error.suggestions[0]).toContain(">= 23.2.0");
     expect(netlifyExec).toHaveBeenLastCalledWith(["-V"]);
   });
@@ -389,5 +387,60 @@ describe("netlify-cli too old for deploy", () => {
     ]).catch((e) => e);
     expect(error.message).toContain("(version unknown) is too old");
     expect(error.suggestions[0]).toContain(">= 23.2.0");
+  });
+
+  it("does not call netlify-cli 23.5.0 too old for an unknown option", async () => {
+    netlifyExec
+      .mockRejectedValueOnce(
+        mapNetlifyError(" ›   Error: unknown option '--foo'\n", 1),
+      )
+      .mockResolvedValueOnce("netlify-cli/23.5.0 darwin-arm64 node-v22.1.0\n");
+    const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
+      (e) => e,
+    );
+    expect(error.code).toBe("UNKNOWN");
+    expect(error.message).not.toContain("too old");
+    expect(error.message).toContain("build failed");
+  });
+});
+
+describe("failed deploy output is never echoed", () => {
+  const SECRET = "sk_live_FAKE_SECRET_123";
+
+  beforeEach(() => {
+    netlifyJson.mockReset();
+    netlifyExec.mockReset();
+  });
+
+  const failures: Array<[string, string]> = [
+    [
+      "build output on stdout, empty stderr",
+      `> build\nAPI_KEY=${SECRET}\nBuild failed`,
+    ],
+    [
+      "build output on stderr",
+      `API_KEY=${SECRET}\nCommand failed with exit code 1`,
+    ],
+    [
+      "config error",
+      ` ›   Error: When resolving config file /r/netlify.toml: ${SECRET} does not exist`,
+    ],
+    ["not-found wording", `token ${SECRET} not found`],
+    [
+      "commander error from a build tool",
+      `vite build\nerror: unknown option '--foo'\nTOKEN=${SECRET}`,
+    ],
+  ];
+
+  it.each(failures)("%s", async (_name, output) => {
+    netlifyExec.mockRejectedValueOnce(mapNetlifyError(output, 1));
+    const error = await deployCommand(["--dir", DIR, "--site", "s"]).catch(
+      (e) => e,
+    );
+    expect(error).toBeInstanceOf(AxiError);
+    expect(error.code).not.toBe("NETLIFY_TOO_OLD");
+    expect(error.message).not.toContain(SECRET);
+    expect(error.suggestions.join("\n")).not.toContain(SECRET);
+    expect(netlifyExec).toHaveBeenCalledTimes(1);
   });
 });

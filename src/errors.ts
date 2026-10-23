@@ -38,6 +38,8 @@ interface ErrorPattern {
   code: ErrorCode;
   message?: string | ((match: RegExpMatchArray) => string);
   suggestions: string[];
+  /** Match the undecorated stderr, so the pattern can require netlify's own line prefix. */
+  raw?: boolean;
 }
 
 // Walked in order; first regex hit wins, so narrow patterns must sit ahead of
@@ -51,9 +53,12 @@ interface ErrorPattern {
 // hook prints it (netlify-cli 18.0.1 dist/commands/main.js), e.g. when an old
 // netlify-cli is handed a flag it does not have yet:
 //   " ›   Error: unknown option '--create-site'"
+// It must match on that decorated line only: a build that netlify runs can
+// print the same commander wording for a flag of some other tool.
 const patterns: ErrorPattern[] = [
   {
-    pattern: /unknown option '([^']+)'/i,
+    pattern: /^\s*›\s*Error:\s*(?:error:\s*)?unknown option '([^']+)'/im,
+    raw: true,
     code: "NETLIFY_TOO_OLD",
     message: (match) => `netlify-cli does not accept ${match[1]}`,
     suggestions: [
@@ -97,7 +102,7 @@ const patterns: ErrorPattern[] = [
 export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
   const trimmed = stripDecoration(stderr);
   for (const entry of patterns) {
-    const match = trimmed.match(entry.pattern);
+    const match = (entry.raw ? stderr : trimmed).match(entry.pattern);
     if (match) {
       const message =
         typeof entry.message === "function"

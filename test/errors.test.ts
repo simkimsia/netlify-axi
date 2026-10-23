@@ -19,6 +19,14 @@ describe("mapNetlifyError", () => {
     expect(err.suggestions.join(" ")).toContain("netlify-cli@latest");
   });
 
+  it("ignores commander's wording when it is not netlify's own line", () => {
+    const err = mapNetlifyError(
+      "> vite build\nerror: unknown option '--foo'\nBuild script returned non-zero exit code: 2",
+      2,
+    );
+    expect(err.code).not.toBe("NETLIFY_TOO_OLD");
+  });
+
   it("maps auth failures to AUTH with a login suggestion", () => {
     const err = mapNetlifyError(" ›   JSONHTTPError: Unauthorized", 1);
     expect(err.code).toBe("AUTH");
