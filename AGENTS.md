@@ -29,6 +29,14 @@ upstream `kunchenguid/axi` repo).
 - `src/args.ts` — read commands take no args/flags (`assertNoArgs`); commands
   with flags use `takeFlag`/`takeBoolFlag` then `rejectExtraArgs`. Unknown
   input is rejected by name with exit code 2 before any netlify call (AXI §6).
+- `src/sites.ts` — shared site resolution for one-site commands: `--site`
+  (id, name or custom domain, matched exactly against `sites:list`), else
+  the linked site, else NOT_LINKED listing the names (`noTargetError`).
+  `readFailedError` rewrites a failed read call into fixed text so raw
+  netlify output never reaches an error.
+- `src/commands/deploys.ts` — reads `netlify api listSiteDeploys` (no
+  netlify-cli has a deploy-list command, checked through 27.14.2); the live
+  deploy is the site entry's `published_deploy.id`.
 - `src/commands/deploy.ts` — the one write command. It always names the
   target for netlify (`--site`, or `--create-site` plus `--team`) so netlify
   never prompts; unnamed + unlinked, or several teams, refuses and lists the

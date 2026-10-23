@@ -4,8 +4,7 @@ import { rejectExtraArgs, takeBoolFlag, takeFlag } from "../args.js";
 import { AxiError, UNKNOWN_SUGGESTION } from "../errors.js";
 import { netlifyExec, netlifyJson } from "../netlify.js";
 import { encode, renderHelp, renderOutput } from "../toon.js";
-import type { NetlifySite } from "./list.js";
-import type { NetlifyStatus } from "./status.js";
+import { linkedSiteId, listSites, noTargetError } from "../sites.js";
 
 export const DEPLOY_HELP = `usage: netlify-axi deploy --dir <path> [--site <name-or-id> | --create-site <name> [--team <slug>]] [flags]
 Uploads a directory to a Netlify site and prints the deploy it made (site, ids, state, url).
@@ -130,30 +129,6 @@ export function pickTeam(accounts: NetlifyAccount[]): string {
     `You belong to ${slugs.length} teams; --create-site needs --team`,
     "VALIDATION_ERROR",
     [`Pass --team with one of: ${slugs.join(", ")}`],
-  );
-}
-
-const SITE_NAME_LIMIT = 20;
-
-/** The refusal for "no site named, none linked": list the candidates. */
-export function noTargetError(sites: NetlifySite[]): AxiError {
-  const names = sites.map((s) => s.name).filter(Boolean);
-  const help: string[] = [];
-  if (names.length === 0) {
-    help.push("No sites in this account: pass --create-site <name>");
-  } else {
-    const shown = names.slice(0, SITE_NAME_LIMIT).join(", ");
-    const more =
-      names.length > SITE_NAME_LIMIT
-        ? ` (+${names.length - SITE_NAME_LIMIT} more, see \`netlify-axi list\`)`
-        : "";
-    help.push(`Pass --site with one of: ${shown}${more}`);
-    help.push("Or pass --create-site <name> for a new site");
-  }
-  return new AxiError(
-    "No site named and no site is linked to this directory",
-    "NOT_LINKED",
-    help,
   );
 }
 
@@ -321,21 +296,9 @@ export async function deployCommand(args: string[]): Promise<string> {
         await netlifyJson<NetlifyAccount[]>(["api", "listAccountsForUser"]),
       );
   } else {
-    const status = await netlifyJson<NetlifyStatus>(["status", "--json"]).catch(
-      async (error: unknown) => {
-        if (error instanceof AxiError && error.code === "NOT_LINKED") {
-          throw noTargetError(
-            await netlifyJson<NetlifySite[]>(["sites:list", "--json"]),
-          );
-        }
-        throw error;
-      },
-    );
-    const linked = status.siteData?.["site-id"];
+    const linked = await linkedSiteId();
     if (!linked) {
-      throw noTargetError(
-        await netlifyJson<NetlifySite[]>(["sites:list", "--json"]),
-      );
+      throw noTargetError(await listSites(), { createSite: true });
     }
     // Name the linked site explicitly so netlify has nothing left to ask.
     target.site = linked;

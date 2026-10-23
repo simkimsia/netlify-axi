@@ -17,6 +17,14 @@ export interface NetlifySite {
   ssl_url?: string;
   custom_domain?: string | null;
   updated_at?: string | null;
+  admin_url?: string;
+  /** The deploy currently live at the site's URL. */
+  published_deploy?: {
+    id?: string;
+    branch?: string | null;
+    commit_ref?: string | null;
+    published_at?: string | null;
+  } | null;
 }
 
 /** Best public URL for a site: custom domain first, then ssl_url, then url. */

@@ -9,7 +9,7 @@ reference implementation [`gh-axi`](https://github.com/kunchenguid/gh-axi).
 
 ## Status
 
-Early (v0). Read-only commands plus `deploy`.
+Early (v0). Read-only commands (including `deploys`) plus `deploy`.
 
 ## Requirements
 
@@ -45,6 +45,8 @@ netlify-axi            # dashboard: linked site, or most recent sites
 netlify-axi list       # all sites you have access to
 netlify-axi status     # site linked to the current directory
 netlify-axi whoami     # logged-in Netlify account
+netlify-axi deploys    # linked site's newest deploys, and which one is live
+netlify-axi deploys --site my-app --limit 30  # any site, no linked dir needed
 netlify-axi deploy --dir dist          # draft deploy to the linked site
 netlify-axi deploy --dir dist --prod   # publish to production
 netlify-axi deploy --dir public --prod --create-site my-mockup

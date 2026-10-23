@@ -16,13 +16,13 @@ vi.mock("../src/netlify.js", () => ({ netlifyJson, netlifyExec }));
 const {
   deployArgv,
   deployCommand,
-  noTargetError,
   parseDeployArgs,
   parseDeployOutput,
   parseNetlifyVersion,
   pickTeam,
   renderDeploy,
 } = await import("../src/commands/deploy.js");
+const { noTargetError } = await import("../src/sites.js");
 
 const DIR = mkdtempSync(join(tmpdir(), "netlify-axi-deploy-"));
 const FILE = join(DIR, "index.html");
@@ -152,7 +152,7 @@ describe("noTargetError", () => {
       id: String(i),
       name: `site-${i}`,
     }));
-    const error = noTargetError(sites);
+    const error = noTargetError(sites, { createSite: true });
     expect(error.code).toBe("NOT_LINKED");
     expect(error.suggestions[0]).toContain("site-0, site-1");
     expect(error.suggestions[0]).toContain("(+2 more");
