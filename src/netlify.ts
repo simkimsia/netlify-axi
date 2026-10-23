@@ -121,27 +121,75 @@ function run(args: string[], maxBuffer: number): Promise<ExecResult> {
   });
 }
 
+export interface NetlifyJsonOptions {
+  /**
+   * The command's output can hold secret values (e.g. `env:list --json`).
+   * No error built from this call echoes any of netlify's stdout or stderr
+   * (VISION.md Safety: values never appear in errors).
+   */
+  secretOutput?: boolean;
+}
+
+/** Next step for a failed call whose output was withheld. */
+export const WITHHELD_SUGGESTION =
+  "Rerun with plain `netlify` to see its output yourself (it can hold secret values: do not paste it anywhere), then report the gap at https://github.com/simkimsia/netlify-axi/issues";
+
+function withheldMessage(args: string[], detail: string): string {
+  return `netlify ${args[0] ?? ""} ${detail}; its output is withheld because it can contain secret values`;
+}
+
 /** Execute netlify and return parsed JSON. */
 export async function netlifyJson<T = unknown>(
   args: string[],
-  options: ExecOptions = {},
+  options: ExecOptions & NetlifyJsonOptions = {},
 ): Promise<T> {
   const maxBuffer = options.maxBuffer ?? MAX_BUFFER_BYTES;
   const result = await run(args, maxBuffer);
   if (result.stderr === "ENOENT") throw netlifyNotInstalledError();
   if (result.interrupted) throw interruptedError(result.interrupted, maxBuffer);
   if (result.exitCode !== 0) {
-    throw mapNetlifyError(result.stderr || result.stdout, result.exitCode);
+    const mapped = mapNetlifyError(
+      result.stderr || result.stdout,
+      result.exitCode,
+    );
+    if (!options.secretOutput) throw mapped;
+    throw redact(mapped, result, args);
   }
   try {
     return JSON.parse(result.stdout) as T;
   } catch {
+    if (options.secretOutput) {
+      throw new AxiError(
+        withheldMessage(args, "printed output that is not JSON"),
+        "UNKNOWN",
+        [WITHHELD_SUGGESTION],
+      );
+    }
     throw new AxiError(
       `Unexpected netlify output: ${result.stdout.slice(0, 200)}`,
       "UNKNOWN",
       [UNKNOWN_SUGGESTION],
     );
   }
+}
+
+/**
+ * Keep the mapped code and next steps, but drop the message whenever it was
+ * lifted from netlify's own output (CONFIG, NOT_FOUND and UNKNOWN echo a
+ * line). Fixed messages such as AUTH's never contain output and are kept.
+ */
+function redact(error: AxiError, result: ExecResult, args: string[]): AxiError {
+  const echoed =
+    error.message !== "" &&
+    (result.stdout.includes(error.message) ||
+      result.stderr.includes(error.message));
+  if (!echoed) return error;
+  return new AxiError(
+    withheldMessage(args, `exited with code ${result.exitCode}`),
+    error.code,
+    error.code === "UNKNOWN" ? [WITHHELD_SUGGESTION] : error.suggestions,
+    error.fromNetlifyLine,
+  );
 }
 
 /** Execute netlify and return raw stdout. */

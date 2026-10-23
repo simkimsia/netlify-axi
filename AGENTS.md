@@ -46,6 +46,11 @@ upstream `kunchenguid/axi` repo).
   choices. It reads `netlify -V` once before deploying and refuses below
   `MIN_NETLIFY_CLI`; an unreadable version proceeds with a help line. Its
   tests mock `src/netlify.ts`; never run a real deploy in tests.
+- `src/commands/env.ts` — lists env var NAMES only. `env:list --json` stdout
+  holds every value, so it calls `netlifyJson(..., { secretOutput: true })`:
+  no error from that call echoes netlify's stdout or stderr (VISION Safety).
+  Any new command whose output can hold a secret must pass it too;
+  `test/env-secret.test.ts` plants a fake value and asserts it never leaks.
 - Commands live in `src/commands/`, return TOON strings via `src/toon.ts`
   helpers; errors render through the `formatError` hook in `src/cli.ts`
   because the SDK's default formatter only recognizes its own AxiError class.

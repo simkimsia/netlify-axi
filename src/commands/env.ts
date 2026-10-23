@@ -1,5 +1,6 @@
+import { assertNoArgs } from "../args.js";
 import { AxiError } from "../errors.js";
-import { netlifyJson } from "../netlify.js";
+import { netlifyJson, WITHHELD_SUGGESTION } from "../netlify.js";
 import { encode, renderHelp, renderOutput } from "../toon.js";
 
 export const ENV_HELP = `usage: netlify-axi env [list]
@@ -23,21 +24,22 @@ export function parseEnv(env: NetlifyEnv): { count: number; names: string[] } {
   return { count: names.length, names };
 }
 
-function rejectExtra(command: string, arg: string): never {
-  const kind = arg.startsWith("-") ? "flag" : "argument";
-  throw new AxiError(
-    `unknown ${kind} ${arg} for \`${command}\``,
-    "VALIDATION_ERROR",
-    [`\`netlify-axi ${command}\` takes no arguments (--help always allowed)`],
-  );
-}
-
 export async function envCommand(args: string[]): Promise<string> {
   const [sub, ...rest] = args;
-  if (sub !== undefined && sub !== "list") rejectExtra("env", sub);
-  if (rest.length > 0) rejectExtra("env list", rest[0]);
+  if (sub !== "list") assertNoArgs("env", args);
+  else assertNoArgs("env list", rest);
 
-  const env = await netlifyJson<NetlifyEnv>(["env:list", "--json"]);
+  // secretOutput: env:list stdout holds every value, so no error may echo it.
+  const env = await netlifyJson<NetlifyEnv>(["env:list", "--json"], {
+    secretOutput: true,
+  });
+  if (typeof env !== "object" || env === null || Array.isArray(env)) {
+    throw new AxiError(
+      "netlify env:list printed JSON that is not a name -> value map; its output is withheld because it can contain secret values",
+      "UNKNOWN",
+      [WITHHELD_SUGGESTION],
+    );
+  }
   const { count, names } = parseEnv(env);
   if (count === 0) {
     return renderOutput([
