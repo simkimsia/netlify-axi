@@ -46,8 +46,10 @@ upstream `kunchenguid/axi` repo).
   choices. It reads `netlify -V` once before deploying and refuses below
   `MIN_NETLIFY_CLI`; an unreadable version proceeds with a help line. Its
   tests mock `src/netlify.ts`; never run a real deploy in tests.
-- `src/commands/env.ts` — lists env var NAMES only. `env:list --json` stdout
-  holds every value, so a failed call goes through
+- `src/commands/env.ts` — lists env var NAMES only. `env:list` reads one
+  context per call (default `dev`), so env calls it once per context in
+  `ENV_CONTEXTS` and unions the names. `env:list --json` stdout holds every
+  value, so a failed call goes through
   `readFailedError(..., { secretOutput: true })`: no error echoes netlify's
   stdout or stderr (VISION Safety), and an UNKNOWN failure's next step warns
   that plain `netlify` prints the values. Any new command whose output can

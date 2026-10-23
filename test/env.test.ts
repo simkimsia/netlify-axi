@@ -10,7 +10,8 @@ vi.mock("../src/netlify.js", async (importOriginal) => ({
   netlifyJson,
 }));
 
-const { envCommand, parseEnv } = await import("../src/commands/env.js");
+const { envCommand, parseEnv, unionContexts, ENV_CONTEXTS } =
+  await import("../src/commands/env.js");
 
 // Shape of `netlify env:list --json` (netlify-cli 18.x): flat name -> value
 // map. Values here are fake sentinels, used to prove they never leak.
@@ -37,42 +38,88 @@ describe("parseEnv", () => {
   });
 });
 
+// Answer each `env:list --json --context <c>` call from a per-context map.
+function byContext(map: Record<string, unknown>) {
+  netlifyJson.mockImplementation(async (argv: string[]) => map[argv[3]] ?? {});
+}
+
+describe("unionContexts", () => {
+  it("lists each name once with the contexts that have a value", () => {
+    expect(unionContexts({ production: ["B", "A"], dev: ["A"] })).toEqual([
+      { name: "A", contexts: "production dev" },
+      { name: "B", contexts: "production" },
+    ]);
+  });
+});
+
 describe("envCommand (netlify mocked)", () => {
   beforeEach(() => {
     netlifyJson.mockReset();
   });
 
-  it("asks netlify for env:list --json", async () => {
-    netlifyJson.mockResolvedValueOnce(FIXTURE);
+  it("asks netlify for env:list --json once per deploy context", async () => {
+    byContext({});
     await envCommand([]);
-    expect(netlifyJson).toHaveBeenCalledWith(["env:list", "--json"]);
+    for (const context of ENV_CONTEXTS) {
+      expect(netlifyJson).toHaveBeenCalledWith([
+        "env:list",
+        "--json",
+        "--context",
+        context,
+      ]);
+    }
+    expect(netlifyJson).toHaveBeenCalledTimes(ENV_CONTEXTS.length);
   });
 
-  it("renders sorted names and a count, never a value", async () => {
-    netlifyJson.mockResolvedValueOnce(FIXTURE);
+  it("renders sorted names, their contexts and a count, never a value", async () => {
+    byContext({ production: FIXTURE, "deploy-preview": FIXTURE, dev: FIXTURE });
     const out = await envCommand([]);
     expect(decode(out)).toEqual({
       count: "3 variables",
-      names: ["API_TOKEN", "DATABASE_URL", "SUPABASE_URL"],
+      variables: [
+        { name: "API_TOKEN", contexts: "production deploy-preview dev" },
+        { name: "DATABASE_URL", contexts: "production deploy-preview dev" },
+        { name: "SUPABASE_URL", contexts: "production deploy-preview dev" },
+      ],
     });
     expect(out).not.toContain("secret-value");
   });
 
-  it("accepts the explicit `list` subcommand", async () => {
-    netlifyJson.mockResolvedValueOnce(FIXTURE);
-    const out = await envCommand(["list"]);
-    expect(out).toContain("3 variables");
+  it("lists a variable that has a value only in production", async () => {
+    byContext({
+      production: {
+        PROD_ONLY_KEY: "secret-value-prod",
+        SHARED: "secret-value-4",
+      },
+      dev: { SHARED: "secret-value-5" },
+    });
+    const out = await envCommand([]);
+    expect(decode(out)).toEqual({
+      count: "2 variables",
+      variables: [
+        { name: "PROD_ONLY_KEY", contexts: "production" },
+        { name: "SHARED", contexts: "production dev" },
+      ],
+    });
+    expect(out).not.toContain("secret-value");
   });
 
-  it("says so, with a next step, when no variable is set", async () => {
-    netlifyJson.mockResolvedValueOnce({});
+  it("says so, with a next step, when no variable is set in any context", async () => {
+    byContext({});
     const out = await envCommand([]);
-    expect(out).toContain("env: 0 variables set for the linked site");
+    expect(out).toContain(
+      "env: 0 variables set for the linked site in any context",
+    );
     expect(out).toContain("netlify env:set <name> <value>");
   });
 
-  it("rejects unknown arguments before calling netlify", async () => {
-    for (const args of [["--values"], ["get"], ["list", "API_TOKEN"]]) {
+  it("rejects any argument, including `list`, before calling netlify", async () => {
+    for (const args of [
+      ["--values"],
+      ["get"],
+      ["list"],
+      ["list", "API_TOKEN"],
+    ]) {
       const error = await envCommand(args).catch((e) => e);
       expect(error).toBeInstanceOf(AxiError);
       expect(error.code).toBe("VALIDATION_ERROR");
@@ -81,7 +128,7 @@ describe("envCommand (netlify mocked)", () => {
   });
 
   it("passes netlify errors through", async () => {
-    netlifyJson.mockRejectedValueOnce(
+    netlifyJson.mockRejectedValue(
       new AxiError("No Netlify site is linked to this directory", "NOT_LINKED"),
     );
     const error = await envCommand([]).catch((e) => e);
@@ -89,7 +136,7 @@ describe("envCommand (netlify mocked)", () => {
   });
 
   it("refuses JSON that is not a name -> value map, without echoing it", async () => {
-    netlifyJson.mockResolvedValueOnce(["secret-value-9"]);
+    netlifyJson.mockResolvedValue(["secret-value-9"]);
     const error = await envCommand([]).catch((e) => e);
     expect(error.code).toBe("UNKNOWN");
     expect(JSON.stringify([error.message, error.suggestions])).not.toContain(
