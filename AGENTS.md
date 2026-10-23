@@ -60,6 +60,16 @@ upstream `kunchenguid/axi` repo).
   a browser login flow and hangs on "Waiting for authorization...". Never
   probe auth state by clearing HOME/config; use an invalid
   `NETLIFY_AUTH_TOKEN` env var to observe auth errors safely.
+- `netlify deploy` (read from published netlify-cli sources, never run here):
+  `--no-build` exists from 21.0.0, where building became the default;
+  `--create-site [name]` and `--team <slug>` from 23.2.0 (`MIN_NETLIFY_CLI`).
+  An older CLI rejects a flag with commander's `unknown option '<flag>'`,
+  mapped to `NETLIFY_TOO_OLD`. With `--json`, `log()` is silenced and the
+  final JSON (`site_id`, `site_name`, `deploy_id`, `deploy_url`, `logs`,
+  `url` for prod) is printed only after the deploy reaches `ready`; build
+  output may still precede it. A locked production deploy asks to unlock and
+  exits 0 with no JSON if declined, so no `deploy_id` means no deploy.
+  `netlify -V` prints a one-line `netlify-cli/<version> ...`.
 - The SDK ships `update` as a reserved built-in, so `netlify-axi update` works
   with no code here; the npm package name resolves from `package.json`.
 

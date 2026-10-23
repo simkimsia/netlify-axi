@@ -7,6 +7,18 @@ import {
 
 // All inputs below are verbatim netlify-cli 18.x stderr captured from real runs.
 describe("mapNetlifyError", () => {
+  it("maps commander's unknown-option rejection to NETLIFY_TOO_OLD", () => {
+    // Wording from netlify-cli 18.0.1's outputError hook (dist/commands/main.js)
+    // around commander's "unknown option" error; not captured from a run.
+    const err = mapNetlifyError(
+      " ›   Error: unknown option '--no-build'\n ›   See more help with --help",
+      1,
+    );
+    expect(err.code).toBe("NETLIFY_TOO_OLD");
+    expect(err.message).toBe("netlify-cli does not accept --no-build");
+    expect(err.suggestions.join(" ")).toContain("netlify-cli@latest");
+  });
+
   it("maps auth failures to AUTH with a login suggestion", () => {
     const err = mapNetlifyError(" ›   JSONHTTPError: Unauthorized", 1);
     expect(err.code).toBe("AUTH");

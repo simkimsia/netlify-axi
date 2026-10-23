@@ -15,7 +15,9 @@ Early (v0). Read-only commands plus `deploy`.
 
 - Node.js >= 20
 - The [Netlify CLI](https://docs.netlify.com/cli/get-started/) installed and
-  logged in (`netlify login`)
+  logged in (`netlify login`). `deploy` needs netlify-cli 23.2.0 or later,
+  the first release with `--create-site` and `--team`; an older one fails
+  with `NETLIFY_TOO_OLD`. The read commands work on 18.x.
 
 ## Install
 
@@ -46,10 +48,14 @@ netlify-axi whoami     # logged-in Netlify account
 netlify-axi deploy --dir dist          # draft deploy to the linked site
 netlify-axi deploy --dir dist --prod   # publish to production
 netlify-axi deploy --dir public --prod --create-site my-mockup
+netlify-axi deploy --dir dist --prod --no-build  # upload as is, skip the build
 netlify-axi --help
 netlify-axi --version  # fast path, never loads the command graph
 netlify-axi update     # self-update (built into axi-sdk-js)
 ```
+
+`deploy` runs the site's build command before it uploads, as `netlify deploy`
+does since netlify-cli 21. Pass `--no-build` to upload `--dir` as it is.
 
 Example output (TOON):
 

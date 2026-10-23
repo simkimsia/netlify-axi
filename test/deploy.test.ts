@@ -19,6 +19,7 @@ const {
   noTargetError,
   parseDeployArgs,
   parseDeployOutput,
+  parseNetlifyVersion,
   pickTeam,
   renderDeploy,
 } = await import("../src/commands/deploy.js");
@@ -27,15 +28,18 @@ const DIR = mkdtempSync(join(tmpdir(), "netlify-axi-deploy-"));
 const FILE = join(DIR, "index.html");
 writeFileSync(FILE, "<h1>hi</h1>");
 
-// Shape of `netlify deploy --json --prod` as netlify-cli 18.x writes it. Not
-// captured from a live run: this repo never runs a real deploy in tests.
+// Keys of `netlify deploy --json --prod` as netlify-cli 23.2.0's printResults
+// writes them (read from its published source). Values are made up: this repo
+// never runs a real deploy, in tests or anywhere else.
 const PROD_RESULT = {
-  name: "my-mockup",
   site_id: "ab738028-fb0a-4b71-9b4b-d4a83fdfd816",
   site_name: "my-mockup",
   deploy_id: "6718f0c2a1b2c3d4e5f60718",
   deploy_url: "https://6718f0c2a1b2c3d4e5f60718--my-mockup.netlify.app",
-  logs: "https://app.netlify.com/sites/my-mockup/deploys/6718f0c2a1b2c3d4e5f60718",
+  logs: "https://app.netlify.com/projects/my-mockup/deploys/6718f0c2a1b2c3d4e5f60718",
+  function_logs: "https://app.netlify.com/projects/my-mockup/logs/functions",
+  edge_function_logs:
+    "https://app.netlify.com/projects/my-mockup/logs/edge-functions",
   url: "https://my-mockup.netlify.app",
 };
 
@@ -168,10 +172,26 @@ describe("parseDeployOutput", () => {
     expect(parseDeployOutput(stdout).deploy_id).toBe(PROD_RESULT.deploy_id);
   });
 
-  it("throws UNKNOWN with a next step on unparseable output", () => {
-    const error = validationError(() => parseDeployOutput("Deploying..."));
-    expect(error.code).toBe("UNKNOWN");
-    expect(error.suggestions.length).toBe(1);
+  it("never echoes stdout when it cannot find a deploy result", () => {
+    const stdout = "Netlify Build\nSECRET_TOKEN=hunter2 npm run build\n";
+    const error = validationError(() => parseDeployOutput(stdout));
+    expect(error.code).toBe("DEPLOY_NOT_REPORTED");
+    const rendered = [error.message, ...error.suggestions].join("\n");
+    expect(rendered).not.toContain("hunter2");
+    expect(rendered).not.toContain("SECRET_TOKEN");
+  });
+
+  it("treats JSON without a deploy_id as no deploy, not success", () => {
+    const error = validationError(() =>
+      parseDeployOutput('{"site_id":"abc","site_name":"x"}'),
+    );
+    expect(error.code).toBe("DEPLOY_NOT_REPORTED");
+  });
+
+  it("treats empty stdout (e.g. a declined lock prompt) as no deploy", () => {
+    const error = validationError(() => parseDeployOutput(""));
+    expect(error.code).toBe("DEPLOY_NOT_REPORTED");
+    expect(error.suggestions.join(" ")).toContain("locked");
   });
 });
 
@@ -304,5 +324,70 @@ describe("deployCommand (netlify mocked)", () => {
     const error = await deployCommand(["--dir", DIR]).catch((e) => e);
     expect(error.code).toBe("AUTH");
     expect(netlifyExec).not.toHaveBeenCalled();
+  });
+});
+
+describe("netlify-cli too old for deploy", () => {
+  beforeEach(() => {
+    netlifyJson.mockReset();
+    netlifyExec.mockReset();
+  });
+
+  it("reads the version from `netlify -V`", () => {
+    expect(
+      parseNetlifyVersion("netlify-cli/18.0.1 darwin-arm64 node-v22.1.0\n"),
+    ).toBe("18.0.1");
+    expect(parseNetlifyVersion("")).toBeUndefined();
+  });
+
+  it("turns an unknown-option rejection into an upgrade instruction", async () => {
+    const { mapNetlifyError } =
+      await vi.importActual<typeof import("../src/errors.js")>(
+        "../src/errors.js",
+      );
+    // netlify-cli 18.0.1 has no --create-site; commander rejects it with this
+    // stderr (outputError hook in its dist/commands/main.js).
+    const rejection = mapNetlifyError(
+      " ›   Error: unknown option '--create-site'\n ›   See more help with --help\n",
+      1,
+    );
+    expect(rejection.code).toBe("NETLIFY_TOO_OLD");
+    netlifyExec
+      .mockRejectedValueOnce(rejection)
+      .mockResolvedValueOnce("netlify-cli/18.0.1 darwin-arm64 node-v22.1.0\n");
+    const error = await deployCommand([
+      "--dir",
+      DIR,
+      "--create-site",
+      "x",
+      "--team",
+      "acme",
+    ]).catch((e) => e);
+    expect(error.code).toBe("NETLIFY_TOO_OLD");
+    expect(error.message).toBe(
+      "netlify-cli 18.0.1 is too old for `deploy` (netlify-cli does not accept --create-site)",
+    );
+    expect(error.suggestions[0]).toContain(">= 23.2.0");
+    expect(netlifyExec).toHaveBeenLastCalledWith(["-V"]);
+  });
+
+  it("still gives the upgrade instruction when the version cannot be read", async () => {
+    netlifyExec
+      .mockRejectedValueOnce(
+        new AxiError(
+          "netlify-cli does not accept --no-build",
+          "NETLIFY_TOO_OLD",
+        ),
+      )
+      .mockRejectedValueOnce(new AxiError("boom", "UNKNOWN"));
+    const error = await deployCommand([
+      "--dir",
+      DIR,
+      "--site",
+      "s",
+      "--no-build",
+    ]).catch((e) => e);
+    expect(error.message).toContain("(version unknown) is too old");
+    expect(error.suggestions[0]).toContain(">= 23.2.0");
   });
 });

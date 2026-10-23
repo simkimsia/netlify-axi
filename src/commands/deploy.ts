@@ -11,6 +11,8 @@ export const DEPLOY_HELP = `usage: netlify-axi deploy --dir <path> [--site <name
 Uploads a directory to a Netlify site and prints the deploy it made (site, ids, state, url).
 Without --prod the deploy is a draft at its own URL; production is untouched.
 Without --site or --create-site it deploys to the site linked to this directory, and refuses if there is none.
+Runs the site's build command before uploading unless --no-build is passed.
+Needs netlify-cli >= 23.2.0 (older releases lack --create-site and --team).
 flags[8]:
   --dir <path>          directory to upload (required)
   --prod                publish to the production URL
@@ -25,6 +27,9 @@ examples:
   netlify-axi deploy --dir dist --prod
   netlify-axi deploy --dir public --prod --create-site my-mockup
 `;
+
+/** First netlify-cli release whose `deploy` has every flag forwarded here. */
+export const MIN_NETLIFY_CLI = "23.2.0";
 
 export interface DeployOptions {
   dir: string;
@@ -171,30 +176,54 @@ export function deployArgv(
   return argv;
 }
 
-/** Shape of `netlify deploy --json` (netlify-cli 18.x); `url` only with --prod. */
+/**
+ * Shape of `netlify deploy --json`, read from netlify-cli 23.2.0's
+ * dist/commands/deploy/deploy.js (printResults). `url` is set only for a
+ * production deploy. netlify prints it after waitForDeploy has seen the
+ * deploy reach `ready`; a failed deploy exits non-zero instead.
+ */
 export interface NetlifyDeployResult {
-  name?: string;
   site_id?: string;
   site_name?: string;
   deploy_id?: string;
   deploy_url?: string;
   logs?: string;
+  function_logs?: string;
+  edge_function_logs?: string;
   url?: string;
 }
+
+/** Help for a deploy netlify did not report: say what to check, not guess. */
+const UNREPORTED_HELP = [
+  "No deploy is confirmed. Check the site's deploys in the Netlify UI before retrying",
+  "If production deploys are locked for this site, netlify asks to unlock them and netlify-axi cannot answer: unlock in the Netlify UI, or deploy a draft without --prod",
+];
 
 /**
  * netlify may print build output ahead of the JSON document, so parse the
  * whole of stdout first and fall back to the last line that opens an object.
+ * stdout is never echoed in an error: build logs can carry env values.
  */
 export function parseDeployOutput(stdout: string): NetlifyDeployResult {
   const text = stdout.trim();
+  if (text === "") {
+    throw new AxiError(
+      "netlify deploy exited without reporting a deploy",
+      "DEPLOY_NOT_REPORTED",
+      UNREPORTED_HELP,
+    );
+  }
   const candidates = [text];
   const lastObject = text.lastIndexOf("\n{");
   if (lastObject !== -1) candidates.push(text.slice(lastObject + 1));
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        typeof (parsed as NetlifyDeployResult).deploy_id === "string"
+      ) {
         return parsed as NetlifyDeployResult;
       }
     } catch {
@@ -202,9 +231,9 @@ export function parseDeployOutput(stdout: string): NetlifyDeployResult {
     }
   }
   throw new AxiError(
-    `Unexpected netlify deploy output: ${text.slice(0, 200)}`,
-    "UNKNOWN",
-    [UNKNOWN_SUGGESTION],
+    "netlify deploy finished without a deploy result netlify-axi could read (output not shown: it may include build logs)",
+    "DEPLOY_NOT_REPORTED",
+    [...UNREPORTED_HELP, UNKNOWN_SUGGESTION],
   );
 }
 
@@ -213,14 +242,14 @@ export function renderDeploy(
   result: NetlifyDeployResult,
   opts: { prod: boolean; created: boolean },
 ): string {
-  const site = result.site_name ?? result.name ?? "unknown";
+  const site = result.site_name ?? "unknown";
   const deploy: Record<string, unknown> = {
     site,
     site_id: result.site_id ?? "unknown",
     ...(opts.created ? { site_created: true } : {}),
     deploy_id: result.deploy_id ?? "unknown",
-    // `netlify deploy` waits for the deploy to finish and exits non-zero if it
-    // fails, so a parsed success result means the deploy is live.
+    // parseDeployOutput only accepts netlify's final JSON with a deploy_id,
+    // which netlify prints only after the deploy reached `ready`.
     state: "ready",
     production: opts.prod,
     url: (opts.prod ? result.url : result.deploy_url) ?? "unknown",
@@ -273,9 +302,44 @@ export async function deployCommand(args: string[]): Promise<string> {
     target.site = linked;
   }
 
-  const stdout = await netlifyExec(deployArgv(opts, dir, target));
+  const stdout = await netlifyExec(deployArgv(opts, dir, target)).catch(
+    async (error: unknown) => {
+      if (error instanceof AxiError && error.code === "NETLIFY_TOO_OLD") {
+        throw tooOldError(error.message, await netlifyVersion());
+      }
+      throw error;
+    },
+  );
   return renderDeploy(parseDeployOutput(stdout), {
     prod: opts.prod,
     created: Boolean(opts.createSite),
   });
+}
+
+/**
+ * Installed netlify-cli version, if it can be read. `-V` prints commander's
+ * one-line USER_AGENT; `--version` prints a longer environment page.
+ */
+async function netlifyVersion(): Promise<string | undefined> {
+  const out = await netlifyExec(["-V"]).catch(() => "");
+  return parseNetlifyVersion(out);
+}
+
+/** `netlify -V` prints e.g. "netlify-cli/18.0.1 darwin-arm64 node-v22.1.0". */
+export function parseNetlifyVersion(output: string): string | undefined {
+  return output.match(/netlify-cli\/(\d+\.\d+\.\d+\S*)/)?.[1];
+}
+
+/** Rewrite netlify's "unknown option" into the version the agent must install. */
+export function tooOldError(
+  detail: string,
+  found: string | undefined,
+): AxiError {
+  return new AxiError(
+    `netlify-cli ${found ?? "(version unknown)"} is too old for \`deploy\` (${detail})`,
+    "NETLIFY_TOO_OLD",
+    [
+      `Upgrade to netlify-cli >= ${MIN_NETLIFY_CLI}: \`npm install -g netlify-cli@latest\`, then retry`,
+    ],
+  );
 }

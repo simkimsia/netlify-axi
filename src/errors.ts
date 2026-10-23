@@ -5,6 +5,8 @@ export type ErrorCode =
   | "CONFIG"
   | "VALIDATION_ERROR"
   | "NETLIFY_NOT_INSTALLED"
+  | "NETLIFY_TOO_OLD"
+  | "DEPLOY_NOT_REPORTED"
   | "UNKNOWN";
 
 export class AxiError extends Error {
@@ -34,7 +36,7 @@ export function netlifyNotInstalledError(): AxiError {
 interface ErrorPattern {
   pattern: RegExp;
   code: ErrorCode;
-  message?: string;
+  message?: string | ((match: RegExpMatchArray) => string);
   suggestions: string[];
 }
 
@@ -45,7 +47,19 @@ interface ErrorPattern {
 //   " ›   Error: You don't appear to be in a folder that is linked to a site"
 //   " ›   JSONHTTPError: Not Found"                          (api getSite miss)
 //   " ›   Error: When resolving config file <path>: Base directory does not exist: <dir>"
+// The unknown-option line is commander's wording as netlify-cli's outputError
+// hook prints it (netlify-cli 18.0.1 dist/commands/main.js), e.g. when an old
+// netlify-cli is handed a flag it does not have yet:
+//   " ›   Error: unknown option '--create-site'"
 const patterns: ErrorPattern[] = [
+  {
+    pattern: /unknown option '([^']+)'/i,
+    code: "NETLIFY_TOO_OLD",
+    message: (match) => `netlify-cli does not accept ${match[1]}`,
+    suggestions: [
+      "Upgrade netlify-cli: `npm install -g netlify-cli@latest`, then retry",
+    ],
+  },
   {
     pattern: /unauthorized|not logged in|log ?in required/i,
     code: "AUTH",
@@ -83,12 +97,13 @@ const patterns: ErrorPattern[] = [
 export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
   const trimmed = stripDecoration(stderr);
   for (const entry of patterns) {
-    if (entry.pattern.test(trimmed)) {
-      return new AxiError(
-        entry.message ?? firstLine(trimmed),
-        entry.code,
-        entry.suggestions,
-      );
+    const match = trimmed.match(entry.pattern);
+    if (match) {
+      const message =
+        typeof entry.message === "function"
+          ? entry.message(match)
+          : (entry.message ?? firstLine(trimmed));
+      return new AxiError(message, entry.code, entry.suggestions);
     }
   }
   return new AxiError(
