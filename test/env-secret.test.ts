@@ -20,7 +20,8 @@ vi.mock("node:child_process", () => ({
   ) => cb(reply.error, reply.stdout, reply.stderr),
 }));
 
-const { netlifyJson, WITHHELD_SUGGESTION } = await import("../src/netlify.js");
+const { netlifyJson } = await import("../src/netlify.js");
+const { WITHHELD_SUGGESTION } = await import("../src/sites.js");
 const { envCommand } = await import("../src/commands/env.js");
 
 function exitWith(code: number): Error & { code: number } {
@@ -98,8 +99,10 @@ describe("env never echoes netlify output into an error", () => {
   });
 });
 
-describe("netlifyJson without secretOutput is unchanged", () => {
-  it("still quotes non-JSON output for non-secret commands", async () => {
+// Why env must wrap its call in readFailedError: netlifyJson on its own still
+// quotes stdout that is not JSON.
+describe("netlifyJson on its own", () => {
+  it("quotes non-JSON output", async () => {
     reply.error = null;
     reply.stderr = "";
     reply.stdout = "A new version of netlify-cli is available\n";

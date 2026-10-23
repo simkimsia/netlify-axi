@@ -1,6 +1,7 @@
 import { assertNoArgs } from "../args.js";
 import { AxiError } from "../errors.js";
-import { netlifyJson, WITHHELD_SUGGESTION } from "../netlify.js";
+import { netlifyJson } from "../netlify.js";
+import { readFailedError, WITHHELD_SUGGESTION } from "../sites.js";
 import { encode, renderHelp, renderOutput } from "../toon.js";
 
 export const ENV_HELP = `usage: netlify-axi env [list]
@@ -29,10 +30,15 @@ export async function envCommand(args: string[]): Promise<string> {
   if (sub !== "list") assertNoArgs("env", args);
   else assertNoArgs("env list", rest);
 
-  // secretOutput: env:list stdout holds every value, so no error may echo it.
-  const env = await netlifyJson<NetlifyEnv>(["env:list", "--json"], {
-    secretOutput: true,
-  });
+  // env:list stdout holds every value, so no error may echo netlify's output:
+  // readFailedError rewrites every failure into fixed text (VISION Safety).
+  const env = await netlifyJson<NetlifyEnv>(["env:list", "--json"]).catch(
+    (error: unknown) => {
+      throw readFailedError(error, "env:list --json", undefined, {
+        secretOutput: true,
+      });
+    },
+  );
   if (typeof env !== "object" || env === null || Array.isArray(env)) {
     throw new AxiError(
       "netlify env:list printed JSON that is not a name -> value map; its output is withheld because it can contain secret values",

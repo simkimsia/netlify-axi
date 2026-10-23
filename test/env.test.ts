@@ -42,12 +42,10 @@ describe("envCommand (netlify mocked)", () => {
     netlifyJson.mockReset();
   });
 
-  it("asks netlify for env:list --json with output marked secret", async () => {
+  it("asks netlify for env:list --json", async () => {
     netlifyJson.mockResolvedValueOnce(FIXTURE);
     await envCommand([]);
-    expect(netlifyJson).toHaveBeenCalledWith(["env:list", "--json"], {
-      secretOutput: true,
-    });
+    expect(netlifyJson).toHaveBeenCalledWith(["env:list", "--json"]);
   });
 
   it("renders sorted names and a count, never a value", async () => {

@@ -12,6 +12,22 @@ import type { NetlifyStatus } from "./commands/status.js";
 const SITE_NAME_LIMIT = 20;
 
 /**
+ * Next step for a failed call whose output can hold secret values (e.g.
+ * `env:list --json`): unlike UNKNOWN_SUGGESTION, it warns that rerunning plain
+ * netlify prints those values.
+ */
+export const WITHHELD_SUGGESTION =
+  "Rerun with plain `netlify` to see its output yourself (it can hold secret values: do not paste it anywhere), then report the gap at https://github.com/simkimsia/netlify-axi/issues";
+
+export interface ReadFailedOptions {
+  /**
+   * The call's output can hold secret values. Every message is already fixed
+   * text; this only swaps the UNKNOWN next step for WITHHELD_SUGGESTION.
+   */
+  secretOutput?: boolean;
+}
+
+/**
  * Rewrite a failed read call into fixed text, so no raw netlify output (a
  * stderr line, or stdout that was not JSON) reaches the agent. Codes whose
  * messages errors.ts already fixes pass through unchanged.
@@ -20,6 +36,7 @@ export function readFailedError(
   error: unknown,
   call: string,
   notFound?: AxiError,
+  options: ReadFailedOptions = {},
 ): unknown {
   if (!(error instanceof AxiError)) return error;
   switch (error.code) {
@@ -48,7 +65,7 @@ export function readFailedError(
       return new AxiError(
         `\`netlify ${call}\` failed (output not shown)`,
         "UNKNOWN",
-        [UNKNOWN_SUGGESTION],
+        [options.secretOutput ? WITHHELD_SUGGESTION : UNKNOWN_SUGGESTION],
       );
   }
 }
