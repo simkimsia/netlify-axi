@@ -13,7 +13,7 @@ export type ErrorCode =
 export class AxiError extends Error {
   readonly code: ErrorCode;
   readonly suggestions: string[];
-  /** True when the pattern matched a line netlify itself printed (prefixed "›"). */
+  /** True when the pattern matched a line netlify itself printed (prefixed "›", or "»" on Windows). */
   readonly fromNetlifyLine: boolean;
 
   constructor(
@@ -64,9 +64,11 @@ interface ErrorPattern {
 //   " ›   Error: unknown option '--create-site'"
 // It must match on that decorated line only: a build that netlify runs can
 // print the same commander wording for a flag of some other tool.
+// On Windows netlify-cli decorates its lines with "»" instead of "›", so every
+// check of that prefix accepts both.
 const patterns: ErrorPattern[] = [
   {
-    pattern: /^\s*›\s*Error:\s*(?:error:\s*)?unknown option '([^']+)'/im,
+    pattern: /^\s*[›»]\s*Error:\s*(?:error:\s*)?unknown option '([^']+)'/im,
     raw: true,
     code: "NETLIFY_TOO_OLD",
     message: (match) => `netlify-cli does not accept ${match[1]}`,
@@ -112,7 +114,7 @@ export function mapNetlifyError(stderr: string, exitCode: number): AxiError {
   const trimmed = stripDecoration(stderr);
   const netlifyLines = stderr
     .split("\n")
-    .filter((line) => /^\s*›/.test(line))
+    .filter((line) => /^\s*[›»]/.test(line))
     .join("\n");
   const decorated = stripDecoration(netlifyLines);
   const first = firstMatch(stderr, trimmed);
@@ -159,12 +161,12 @@ function toError(
 export const UNKNOWN_SUGGESTION =
   "Rerun the same command with plain `netlify` to see its full output, then report the gap at https://github.com/simkimsia/netlify-axi/issues";
 
-/** Strip netlify's " ›   " line prefix and leading "Error: " label. */
+/** Strip netlify's " ›   " (" »   " on Windows) line prefix and leading "Error: " label. */
 function stripDecoration(text: string): string {
   return text
     .trim()
     .split("\n")
-    .map((line) => line.replace(/^\s*›\s*/, "").replace(/^Error:\s*/, ""))
+    .map((line) => line.replace(/^\s*[›»]\s*/, "").replace(/^Error:\s*/, ""))
     .join("\n");
 }
 

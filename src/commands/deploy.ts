@@ -14,6 +14,7 @@ import {
   noTargetError,
   readFailedError,
 } from "../sites.js";
+import { shellWord } from "./deploys.js";
 
 export const DEPLOY_HELP = `usage: netlify-axi deploy --dir <path> [--site <name-or-id> | --create-site <name> [--team <slug>]] [flags]
 Uploads a directory to a Netlify site and prints the deploy it made (site, ids, state, url).
@@ -192,7 +193,7 @@ export function deployInterruptedError(site: string): AxiError {
     "netlify deploy was stopped before it finished; a deploy may have started (output not shown: it may include build logs)",
     "DEPLOY_NOT_REPORTED",
     [
-      `Run \`netlify-axi deploys --site ${site}\` to see whether a deploy started and its state before retrying`,
+      `Run \`netlify-axi deploys --site ${shellWord(site)}\` to see whether a deploy started and its state before retrying`,
       "Or open the site's deploys page in the Netlify UI for the build log",
     ],
   );

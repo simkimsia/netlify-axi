@@ -39,6 +39,7 @@ function routeExec(): void {
 const {
   deployArgv,
   deployCommand,
+  deployInterruptedError,
   parseDeployArgs,
   parseDeployOutput,
   parseNetlifyVersion,
@@ -476,6 +477,13 @@ describe("deploy stopped mid-way (buffer overflow or signal)", () => {
     expect(error.message).toContain("a deploy may have started");
     expect(error.suggestions[0]).toContain(
       "netlify-axi deploys --site linked-id",
+    );
+  });
+
+  it("shell-quotes a site that is not one shell word in the recovery hint", () => {
+    const error = deployInterruptedError("my site's");
+    expect(error.suggestions[0]).toContain(
+      "netlify-axi deploys --site 'my site'\\''s'",
     );
   });
 

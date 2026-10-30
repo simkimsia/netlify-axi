@@ -60,6 +60,48 @@ describe("mapNetlifyError", () => {
     expect(err.suggestions.join(" ")).toContain("netlify-axi list");
   });
 
+  // netlify-cli on Windows decorates its own lines with "»" instead of "›"
+  // (issue #27); the same stderr with that prefix must map the same way.
+  describe("Windows-style » decoration", () => {
+    it("maps commander's unknown-option rejection to NETLIFY_TOO_OLD", () => {
+      const err = mapNetlifyError(
+        " »   Error: unknown option '--no-build'\n »   See more help with --help",
+        1,
+      );
+      expect(err.code).toBe("NETLIFY_TOO_OLD");
+      expect(err.message).toBe("netlify-cli does not accept --no-build");
+      expect(err.fromNetlifyLine).toBe(true);
+    });
+
+    it("maps auth failures to AUTH", () => {
+      const err = mapNetlifyError(" »   JSONHTTPError: Unauthorized", 1);
+      expect(err.code).toBe("AUTH");
+      expect(err.fromNetlifyLine).toBe(true);
+    });
+
+    it("maps config resolution failures to CONFIG before NOT_FOUND", () => {
+      const err = mapNetlifyError(
+        " »   Error: When resolving config file C:\\repo\\netlify.toml:\nBase directory does not exist: C:\\repo\\missing",
+        1,
+      );
+      expect(err.code).toBe("CONFIG");
+      expect(err.message).toMatch(/^When resolving config file/);
+      expect(err.fromNetlifyLine).toBe(true);
+    });
+
+    it("maps missing API resources to NOT_FOUND", () => {
+      const err = mapNetlifyError(" »   JSONHTTPError: Not Found", 1);
+      expect(err.code).toBe("NOT_FOUND");
+      expect(err.fromNetlifyLine).toBe(true);
+    });
+
+    it("strips the » prefix and Error: label from UNKNOWN messages", () => {
+      const err = mapNetlifyError(" »   Error: Something exploded", 1);
+      expect(err.code).toBe("UNKNOWN");
+      expect(err.message).toBe("Something exploded");
+    });
+  });
+
   it("falls back to UNKNOWN with the first stderr line, stripped of decoration", () => {
     const err = mapNetlifyError(
       " ›   Error: Something exploded\nstack trace line",
